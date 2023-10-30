@@ -4,6 +4,9 @@
 """Flat Image Tree validator
 
 Written by Simon Glass <sjg@chromium.org>
+
+This does not use dtschema, at least for now, since it does not have bindings
+for FIT.
 """
 
 import argparse
@@ -37,9 +40,36 @@ class Validator:
     """
     def __init__(self, fname):
         self.fname = fname
+        self.fail = []
+
+    def add_fail(self, msg):
+        """Add a new failure to the list
+
+        Args:
+            msg (str): Message describing the failure
+        """
+        self.fail.append(msg)
+
+    def show_results(self):
+        """Show the results of validation"""
+        if self.fail:
+            print('FAIL')
+            for warn in self.fail:
+                print(warn)
+        else:
+            print('PASS')
+
+    def check_fdt(self):
+        try:
+            with open(self.fname, 'rb') as inf:
+                fit = libfdt.Fdt(inf.read())
+        except libfdt.FdtException as exc:
+            self.add_fail(f'Not a valid FDT file {exc}')
 
     def validate(self):
         """Perform validation of the current file"""
+        self.check_fdt()
+        # self.
 
 
 def validate_file(fname):
@@ -48,11 +78,9 @@ def validate_file(fname):
     Args:
         fname (str): Filename to validate
     """
-    with open(fname, 'rb') as inf:
-        fit = libfdt.Fdt(inf.read())
-        val = Validator(fit)
-        val.validate()
-
+    val = Validator(fname)
+    val.validate()
+    val.show_results()
 
 def run_fit_validate():
     """Run the program"""
