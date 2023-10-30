@@ -75,7 +75,7 @@ class SchemaElement(object):
     is a problem during validation.
 
     Args:
-      val: CrosConfigValidator object
+      val: FdtValidator object
       prop: Prop object of the property
     """
     pass
@@ -216,10 +216,10 @@ class PropCustom(PropDesc):
   def Validate(self, val, prop):
     """Validator for this property
 
-    This should be a static method in CrosConfigValidator.
+    This should be a static method in FdtValidator.
 
     Args:
-      val: CrosConfigValidator object
+      val: FdtValidator object
       prop: Prop object of the property
     """
     self.validator(val, prop)
@@ -238,10 +238,10 @@ class PropAny(PropDesc):
   def Validate(self, val, prop):
     """Validator for this property
 
-    This should be a static method in CrosConfigValidator.
+    This should be a static method in FdtValidator.
 
     Args:
-      val: CrosConfigValidator object
+      val: FdtValidator object
       prop: Prop object of the property
     """
     if self.validator:
