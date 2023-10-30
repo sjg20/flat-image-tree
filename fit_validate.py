@@ -37,9 +37,12 @@ class Validator:
 
     Properties:
         fname (str): Filename being validated
+        fit (lifdt.Fdt): FDT to validate
+        fail (list of str): List of failures
     """
     def __init__(self, fname):
         self.fname = fname
+        self.fit = None
         self.fail = []
 
     def add_fail(self, msg):
@@ -62,14 +65,20 @@ class Validator:
     def check_fdt(self):
         try:
             with open(self.fname, 'rb') as inf:
-                fit = libfdt.Fdt(inf.read())
+                self.fit = libfdt.Fdt(inf.read())
+                return True
         except libfdt.FdtException as exc:
             self.add_fail(f'Not a valid FDT file {exc}')
+            return False
+
+    def check_root(self):
+
 
     def validate(self):
         """Perform validation of the current file"""
-        self.check_fdt()
-        # self.
+        if not self.check_fdt():
+            return
+        self.check_root()
 
 
 def validate_file(fname):
