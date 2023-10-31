@@ -3,15 +3,14 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""Validates a given master configuration
+"""Validates a given devicetree
 
-This enforces various rules defined by the master configuration. Some of these
-are fairly simple (the valid properties and subnodes for each node, the
-allowable values for properties) and some are more complex (where phandles
-are allowed to point).
+This enforces various rules defined by the schema. Some of these are fairly
+simple (the valid properties and subnodes for each node, the allowable values
+for properties) and some are more complex (where phandles are allowed to point).
 
 The schema is defined by Python objects containing variable SchemaElement
-subclasses. Each subclass defines how the device tree property is validated.
+subclasses. Each subclass defines how the devicetree property is validated.
 For strings this is via a regex. Phandles properties are validated by the
 target they are expected to point to.
 
@@ -24,21 +23,9 @@ be present in the node for this element to be present. This provides some
 flexibility where the schema for a node has two options, for example, where
 the presence of one element conflicts with the presence of others.
 
-Usage:
-    The validator can be run like this (set PYTHONPATH to your chromium dir):
+Unit tests can be run like this:
 
-    PYTHONPATH=~/cosarm ./validate_config \
-            ~/cosarm/chroot/build/coral/usr/share/chromeos-config/config.dtb \
-            ~/cosarm/chroot/build/reef-uni/usr/share/chromeos-config/config.dtb \
-            README.md
-
-    The output format for each input file is the name of the file followed by a
-    list of validation problems. If there are no problems, the filename is not
-    shown.
-
-    Unit tests can be run like this:
-
-    PYTHONPATH=~/cosarm python validate_config_unittest.py
+    python validate_config_unittest.py
 """
 
 import argparse
@@ -51,10 +38,6 @@ import sys
 from dtoc import fdt, fdt_util
 from elements import NodeAny, NodeDesc
 from elements import PropAny, PropDesc
-#from elements import NodeAny, NodeDesc, NodeModel, NodeSubmodel
-#from elements import PropCustom, PropDesc, PropString, PropStringList
-#from elements import PropPhandleTarget, PropPhandle, CheckPhandleTarget
-#from elements import PropAny, PropFile
 
 def ParseArgv(argv):
     """Parse the available arguments.
@@ -230,7 +213,7 @@ class FdtValidator(object):
             schema = element
         return schema
 
-    def _ValidateSchema(self, node, schema):
+    def _validate_schema(self, node, schema):
         """Simple validation of properties.
 
         This only handles simple mistakes like getting the name wrong. It
@@ -240,7 +223,7 @@ class FdtValidator(object):
             node: fdt.Node where the property appears
             schema: NodeDesc containing schema for this node
         """
-        schema.Validate(self, node)
+        schema.validate(self, node)
         schema_props = [e.name for e in schema.elements
                                         if isinstance(e, PropDesc) and
                                         self.ElementPresent(e, node)]
@@ -258,7 +241,7 @@ class FdtValidator(object):
                     self.Fail(node.path, "Unexpected property '%s', valid list is (%s)" %
                                         (prop_name, ', '.join(schema_props)))
                 continue
-            element.Validate(self, node.props[prop_name])
+            element.validate(self, node.props[prop_name])
 
         # Check that there are no required properties which we don't have
         for element in schema.elements:
@@ -302,7 +285,7 @@ class FdtValidator(object):
                                 (node.name, ', '.join(elements)))
         return schema
 
-    def _ValidateTree(self, node, parent_schema):
+    def _validate_tree(self, node, parent_schema):
         """Validate a node and all its subnodes recursively
 
         Args:
@@ -316,33 +299,16 @@ class FdtValidator(object):
             if schema is None:
                 return
 
-        self._ValidateSchema(node, schema)
+        self._validate_schema(node, schema)
         for subnode in node.subnodes:
-            self._ValidateTree(subnode, schema)
-
-    def GetModelTargetDir(self, path, prop_name):
-        """Get the target directory for a given path and property
-
-        This looks up the model schema for a given path and property, and locates
-        the target directory for that property.
-
-        Args:
-            path: Path within model schema to examine (e.g. /thermal)
-            prop_name: Property name to examine (e.g. 'dptf-dv')
-
-        Returns:
-            target directory for that property (e.g. '/etc/dptf')
-        """
-        element = self.GetElementByPath(
-                '/chromeos/models/MODEL%s/%s' % (path, prop_name))
-        return element.target_dir
+            self._validate_tree(subnode, schema)
 
     def Prepare(self, _fdt):
         """Prepare to validate"""
         self._fdt = _fdt
 
 
-    def Start(self, fname):
+    def start(self, fname):
         """Start validating a master configuration file
 
         Args:
@@ -361,7 +327,7 @@ class FdtValidator(object):
         self.Prepare(fdt.FdtScan(dtb))
 
         # Validate the entire master configuration
-        self._ValidateTree(self._fdt.GetRoot(), self._schema)
+        self._validate_tree(self._fdt.GetRoot(), self._schema)
         return self._errors
 
     @classmethod
@@ -378,7 +344,7 @@ class FdtValidator(object):
             for element in parent.elements:
                 cls.AddElementTargetDirectories(target_dirs, element)
 
-    def GetTargetDirectories(self):
+    def get_target_directories(self):
         """Gets a dict of directory targets for each PropFile property
 
         Returns:
@@ -387,73 +353,5 @@ class FdtValidator(object):
                 value: Ansolute path for this property
         """
         target_dirs = {}
-        self.AddElementTargetDirectories(target_dirs, self._schema)
+        self.add_element_target_directories(target_dirs, self._schema)
         return target_dirs
-
-
-def GetValidator():
-    """Get a schema validator for use by another module
-
-    Returns:
-        FdtValidator object
-    """
-    return FdtValidator(SCHEMA, raise_on_error=True)
-
-
-def ShowErrors(fname, errors):
-    """Show validation errors
-
-    Args:
-        fname: Filename containng the errors
-        errors: List of errors, each a string
-    """
-    print('%s:' % fname, file=sys.stderr)
-    for error in errors:
-        print(error, file=sys.stderr)
-    print(file=sys.stderr)
-
-
-def Main(argv=None):
-    """Main program for validator
-
-    This validates each of the provided files and prints the errors for each, if
-    any.
-
-    Args:
-        argv: Arguments to the problem (excluding argv[0]); if None, uses sys.argv
-    """
-    if argv is None:
-        argv = sys.argv[1:]
-    args = ParseArgv(argv)
-    validator = FdtValidator(SCHEMA, args.raise_on_error)
-    found_errors = False
-    try:
-        # If we are given partial files (.dtsi) then we compile them all into one
-        # .dtb and validate that.
-        if args.partial:
-            errors = validator.Start(args.config, partial=True)
-            fname = args.config[0]
-            if errors:
-                ShowErrors(fname, errors)
-                found_errors = True
-
-        # Otherwise process each file individually
-        else:
-            for fname in args.config:
-                errors = validator.Start([fname])
-                if errors:
-                    found_errors = True
-                    if errors:
-                        ShowErrors(fname, errors)
-                        found_errors = True
-    except cros_build_lib.RunCommandError as e:
-        if args.debug:
-            raise
-        print('Failed: %s' % e, file=sys.stderr)
-        found_errors = True
-    if found_errors:
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    Main()

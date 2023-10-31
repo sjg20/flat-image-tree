@@ -68,7 +68,7 @@ class SchemaElement(object):
         self.conditional_props = conditional_props
         self.parent = None
 
-    def Validate(self, val, prop):
+    def validate(self, val, prop):
         """Validate the schema element against the given property.
 
         This method is overridden by subclasses. It should call val.Fail() if there
@@ -98,7 +98,7 @@ class PropString(PropDesc):
         super().__init__(name, 'string', required, conditional_props)
         self.str_pattern = str_pattern
 
-    def Validate(self, val, prop):
+    def validate(self, val, prop):
         """Check the string with a regex"""
         if not self.str_pattern:
             return
@@ -114,7 +114,7 @@ class PropInt(PropDesc):
     def __init__(self, name, required=False, conditional_props=None):
         super().__init__(name, 'int', required, conditional_props)
 
-    def Validate(self, val, prop):
+    def validate(self, val, prop):
         """Check the timestamp"""
         if prop.type != Type.INT:
             val.Fail(prop.node.path, "'%s' value '%s' must be a u32" %
@@ -126,9 +126,9 @@ class PropTimestamp(PropInt):
     def __init__(self, name, required=False, conditional_props=None):
         super().__init__(name, required, conditional_props)
 
-    def Validate(self, val, prop):
+    def validate(self, val, prop):
         """Check the timestamp"""
-        super().Validate(val, prop)
+        super().validate(val, prop)
 
 
 class PropAddressCells(PropDesc):
@@ -137,7 +137,7 @@ class PropAddressCells(PropDesc):
         super().__init__('#address-cells', 'address-cells', required,
                          conditional_props)
 
-    def Validate(self, val, prop):
+    def validate(self, val, prop):
         """Check the timestamp"""
         if prop.type != Type.INT:
             val.Fail(prop._node.path, "'%s' value '%s' must be a u32" %
@@ -172,7 +172,7 @@ class PropFile(PropDesc):
         self.str_pattern = str_pattern
         self.target_dir = target_dir
 
-    def Validate(self, val, prop):
+    def validate(self, val, prop):
         """Check the filename with a regex"""
         if not self.str_pattern:
             return
@@ -197,7 +197,7 @@ class PropStringList(PropDesc):
                                                                                  conditional_props)
         self.str_pattern = str_pattern
 
-    def Validate(self, val, prop):
+    def alidate(self, val, prop):
         """Check each item of the list with a regex"""
         if not self.str_pattern:
             return
@@ -235,7 +235,7 @@ class PropPhandle(PropDesc):
         super().__init__(name, 'phandle', required, conditional_props)
         self.target_path_match = target_path_match
 
-    def Validate(self, val, prop):
+    def validate(self, val, prop):
         """Check that this phandle points to the correct place"""
         phandle = prop.GetPhandle()
         target = prop.fdt.LookupPhandle(phandle)
@@ -255,7 +255,7 @@ class PropCustom(PropDesc):
         super().__init__(name, 'custom', required, conditional_props)
         self.validator = validator
 
-    def Validate(self, val, prop):
+    def validate(self, val, prop):
         """Validator for this property
 
         This should be a static method in FdtValidator.
@@ -277,7 +277,7 @@ class PropAny(PropDesc):
         super(PropAny, self).__init__('ANY', 'any')
         self.validator = validator
 
-    def Validate(self, val, prop):
+    def validate(self, val, prop):
         """Validator for this property
 
         This should be a static method in FdtValidator.
@@ -301,7 +301,7 @@ class PropOneOf(PropDesc):
         super().__init__(name, 'oneof', required, conditional_props)
         self.options = options
 
-    def Validate(self, val, prop):
+    def validate(self, val, prop):
         """Validator for this property
 
         This should be a static method in FdtValidator.
@@ -350,7 +350,7 @@ class NodeAny(NodeDesc):
         super(NodeAny, self).__init__('ANY', elements=elements)
         self.name_pattern = name_pattern
 
-    def Validate(self, val, node):
+    def validate(self, val, node):
         """Check the name with a regex"""
         if not self.name_pattern:
             return

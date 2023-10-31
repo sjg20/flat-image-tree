@@ -37,17 +37,6 @@ def parse_args(args):
     return parser.parse_args()
 
 
-def validate_file(fname):
-    """Validate a file
-
-    Args:
-        fname (str): Filename to validate
-    """
-    val = Validator(fname)
-    val.validate()
-    val.show_results()
-
-
 def show_errors(fname, errors):
     """Show validation errors
 
@@ -77,7 +66,7 @@ def run_fit_validate(argv=None):
     found_errors = False
     try:
         for fname in args.files:
-            errors = validator.Start(fname)
+            errors = validator.start(fname)
             if errors:
                 found_errors = True
             if errors:

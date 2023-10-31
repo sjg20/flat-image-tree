@@ -68,7 +68,6 @@ BASE_AUDIO_NODE = [
 ]
 
 NOT_WL = {'whitelabel': False}
-'''
 
 @staticmethod
 def ValidateSkuMap(val, prop):
@@ -90,8 +89,6 @@ def ValidateSkuMap(val, prop):
                    "Phandle '%s' sku-id %d must target a model or submodel'" %
                    (prop.name, sku_id))
 
-
-'''
 NodeDesc('audio', elements=[
     NodeAny('', [PropPhandleTarget()] +
             copy.deepcopy(BASE_AUDIO_SCHEMA)),
