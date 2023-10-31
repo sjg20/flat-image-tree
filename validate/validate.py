@@ -39,30 +39,6 @@ from dtoc import fdt, fdt_util
 from elements import NodeAny, NodeDesc
 from elements import PropAny, PropDesc
 
-def ParseArgv(argv):
-    """Parse the available arguments.
-
-    Invalid arguments or -h cause this function to print a message and exit.
-
-    Args:
-        argv: List of string arguments (excluding program name / argv[0])
-
-    Returns:
-        argparse.Namespace object containing the attributes.
-    """
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('-d', '--debug', action='store_true',
-                                            help='Run in debug mode (full exception traceback)')
-    parser.add_argument('-p', '--partial', action='store_true',
-                                            help='Validate a list partial files (.dtsi) individually')
-    parser.add_argument('-r', '--raise-on-error', action='store_true',
-                                            help='Causes the validator to raise on the first ' +
-                                            'error it finds. This is useful for debugging.')
-    parser.add_argument('config', type=str, nargs='+',
-                                            help='Paths to the config files (.dtb) to validated')
-    return parser.parse_args(argv)
-
-
 class FdtValidator(object):
     """Validator for the master configuration"""
     def __init__(self, schema, raise_on_error):
@@ -88,7 +64,7 @@ class FdtValidator(object):
         self.model_list = ['MODEL']
         self.submodel_list = {}
 
-    def Fail(self, location, msg):
+    def fail(self, location, msg):
         """Record a validation failure
 
         Args:
@@ -99,7 +75,7 @@ class FdtValidator(object):
         if self._raise_on_error:
             raise ValueError(self._errors[-1])
 
-    def _IsBuiltInProperty(self, node, prop_name):
+    def _is_builtin_property(self, node, prop_name):
         """Checks if a property is a built-in device-tree construct
 
         This checks for 'reg', '#address-cells' and '#size-cells' properties which
@@ -121,7 +97,7 @@ class FdtValidator(object):
                     return True
         return False
 
-    def ElementPresent(self, schema, parent_node):
+    def element_present(self, schema, parent_node):
         """Check whether a schema element should be present
 
         This handles the conditional_props feature. The list of names of sibling
@@ -153,7 +129,7 @@ class FdtValidator(object):
                     return False
         return True
 
-    def GetElement(self, schema, name, node, expected=None):
+    def get_element(self, schema, name, node, expected=None):
         """Get an element from the schema by name
 
         Args:
@@ -172,7 +148,7 @@ class FdtValidator(object):
                         (because it is internal to the device-tree format)
         """
         for element in schema.elements:
-            if not self.ElementPresent(element, node):
+            if not self.element_present(element, node):
                 continue
             if element.name == name:
                 return element, True
@@ -190,11 +166,11 @@ class FdtValidator(object):
                         isinstance(element, PropAny)):
                 return element, True
         if expected == PropDesc:
-            if name == 'linux,phandle' or self._IsBuiltInProperty(node, name):
+            if name == 'linux,phandle' or self._is_builtin_property(node, name):
                 return None, False
         return None, True
 
-    def GetElementByPath(self, path):
+    def get_element_by_path(self, path):
         """Find a schema element given its full path
 
         Args:
@@ -209,7 +185,7 @@ class FdtValidator(object):
         parts = path.split('/')[1:]
         schema = self._schema
         for part in parts:
-            element, _ = self.GetElement(schema, part, None)
+            element, _ = self.get_element(schema, part, None)
             schema = element
         return schema
 
@@ -226,19 +202,19 @@ class FdtValidator(object):
         schema.validate(self, node)
         schema_props = [e.name for e in schema.elements
                                         if isinstance(e, PropDesc) and
-                                        self.ElementPresent(e, node)]
+                                        self.element_present(e, node)]
 
         # Validate each property and check that there are no extra properties not
         # mentioned in the schema.
         for prop_name in node.props.keys():
             if prop_name == 'linux,phandle':    # Ignore this (use 'phandle' instead)
                 continue
-            element, _ = self.GetElement(schema, prop_name, node, PropDesc)
+            element, _ = self.get_element(schema, prop_name, node, PropDesc)
             if not element or not isinstance(element, PropDesc):
                 if prop_name == 'phandle':
-                    self.Fail(node.path, 'phandle target not valid for this node')
-                elif not self._IsBuiltInProperty(node, prop_name):
-                    self.Fail(node.path, "Unexpected property '%s', valid list is (%s)" %
+                    self.fail(node.path, 'phandle target not valid for this node')
+                elif not self._is_builtin_property(node, prop_name):
+                    self.fail(node.path, "Unexpected property '%s', valid list is (%s)" %
                                         (prop_name, ', '.join(schema_props)))
                 continue
             element.validate(self, node.props[prop_name])
@@ -246,24 +222,24 @@ class FdtValidator(object):
         # Check that there are no required properties which we don't have
         for element in schema.elements:
             if (not isinstance(element, PropDesc) or
-                    not self.ElementPresent(element, node)):
+                    not self.element_present(element, node)):
                 continue
             if element.required and element.name not in node.props.keys():
-                self.Fail(node.path, "Required property '%s' missing" % element.name)
+                self.fail(node.path, "Required property '%s' missing" % element.name)
 
         # Check that any required subnodes are present
         subnode_names = [n.name for n in node.subnodes]
         for element in schema.elements:
             if (not isinstance(element, NodeDesc) or not element.required
-                    or not self.ElementPresent(element, node)):
+                    or not self.element_present(element, node)):
                 continue
             if element.name not in subnode_names:
                 msg = "Missing subnode '%s'" % element.name
                 if subnode_names:
                     msg += ' in %s' % ', '.join(subnode_names)
-                self.Fail(node.path, msg)
+                self.fail(node.path, msg)
 
-    def GetSchema(self, node, parent_schema):
+    def get_schema(self, node, parent_schema):
         """Obtain the schema for a subnode
 
         This finds the schema for a subnode, by scanning for a matching element.
@@ -275,12 +251,12 @@ class FdtValidator(object):
         Returns:
             Schema for the node, or None if none found
         """
-        schema, needed = self.GetElement(parent_schema, node.name, node.parent,
+        schema, needed = self.get_element(parent_schema, node.name, node.parent,
                                                                          NodeDesc)
         if not schema and needed:
             elements = [e.name for e in parent_schema.GetNodes()
-                                    if self.ElementPresent(e, node.parent)]
-            self.Fail(os.path.dirname(node.path),
+                                    if self.element_present(e, node.parent)]
+            self.fail(os.path.dirname(node.path),
                                 "Unexpected subnode '%s', valid list is (%s)" %
                                 (node.name, ', '.join(elements)))
         return schema
@@ -295,7 +271,7 @@ class FdtValidator(object):
         if node.name == '/':
             schema = parent_schema
         else:
-            schema = self.GetSchema(node, parent_schema)
+            schema = self.get_schema(node, parent_schema)
             if schema is None:
                 return
 
@@ -303,7 +279,7 @@ class FdtValidator(object):
         for subnode in node.subnodes:
             self._validate_tree(subnode, schema)
 
-    def Prepare(self, _fdt):
+    def prepare(self, _fdt):
         """Prepare to validate"""
         self._fdt = _fdt
 
@@ -324,7 +300,7 @@ class FdtValidator(object):
         self.submodel_list = {}
         self._errors = []
         dtb = fdt_util.EnsureCompiled(fname)
-        self.Prepare(fdt.FdtScan(dtb))
+        self.prepare(fdt.FdtScan(dtb))
 
         # Validate the entire master configuration
         self._validate_tree(self._fdt.GetRoot(), self._schema)

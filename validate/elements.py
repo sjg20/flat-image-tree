@@ -71,7 +71,7 @@ class SchemaElement(object):
     def validate(self, val, prop):
         """Validate the schema element against the given property.
 
-        This method is overridden by subclasses. It should call val.Fail() if there
+        This method is overridden by subclasses. It should call val.fail() if there
         is a problem during validation.
 
         Args:
@@ -105,7 +105,7 @@ class PropString(PropDesc):
         pattern = '^' + self.str_pattern + '$'
         m = re.match(pattern, prop.value)
         if not m:
-            val.Fail(prop.node.path, "'%s' value '%s' does not match pattern '%s'" %
+            val.fail(prop.node.path, "'%s' value '%s' does not match pattern '%s'" %
                              (prop.name, prop.value, pattern))
 
 
@@ -117,7 +117,7 @@ class PropInt(PropDesc):
     def validate(self, val, prop):
         """Check the timestamp"""
         if prop.type != Type.INT:
-            val.Fail(prop.node.path, "'%s' value '%s' must be a u32" %
+            val.fail(prop.node.path, "'%s' value '%s' must be a u32" %
                              (prop.name, prop.value))
 
 
@@ -140,11 +140,11 @@ class PropAddressCells(PropDesc):
     def validate(self, val, prop):
         """Check the timestamp"""
         if prop.type != Type.INT:
-            val.Fail(prop._node.path, "'%s' value '%s' must be a u32" %
+            val.fail(prop._node.path, "'%s' value '%s' must be a u32" %
                              (prop.name, prop.value))
         val = fdt_util.fdt32_to_cpu(prop.value)
         if val not in [1, 2]:
-            val.Fail(prop._node.path, "'%s' value '%d' must be 1 or 2" %
+            val.fail(prop._node.path, "'%s' value '%d' must be 1 or 2" %
                              (prop.name, val))
 
 
@@ -179,7 +179,7 @@ class PropFile(PropDesc):
         pattern = '^' + self.str_pattern + '$'
         m = re.match(pattern, prop.value)
         if not m:
-            val.Fail(prop.node.path, "'%s' value '%s' does not match pattern '%s'" %
+            val.fail(prop.node.path, "'%s' value '%s' does not match pattern '%s'" %
                              (prop.name, prop.value, pattern))
 
 
@@ -205,7 +205,7 @@ class PropStringList(PropDesc):
         for item in prop.value:
             m = re.match(pattern, item)
             if not m:
-                val.Fail(prop.node.path, "'%s' value '%s' does not match pattern '%s'" %
+                val.fail(prop.node.path, "'%s' value '%s' does not match pattern '%s'" %
                                  (prop.name, item, pattern))
 
 
@@ -240,7 +240,7 @@ class PropPhandle(PropDesc):
         phandle = prop.GetPhandle()
         target = prop.fdt.LookupPhandle(phandle)
         if not CheckPhandleTarget(val, target, self.target_path_match):
-            val.Fail(prop.node.path, "Phandle '%s' targets node '%s' which does not "
+            val.fail(prop.node.path, "Phandle '%s' targets node '%s' which does not "
                              "match pattern '%s'" % (prop.name, target.path,
                                                                              self.target_path_match))
 
@@ -357,7 +357,7 @@ class NodeAny(NodeDesc):
         pattern = '^' + self.name_pattern + '$'
         m = re.match(pattern, node.name)
         if not m:
-            val.Fail(node.path, "Node name '%s' does not match pattern '%s'" %
+            val.fail(node.path, "Node name '%s' does not match pattern '%s'" %
                              (node.name, pattern))
 
 
