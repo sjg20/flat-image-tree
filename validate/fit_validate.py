@@ -47,11 +47,18 @@ def validate_file(fname):
     val.validate()
     val.show_results()
 
-def run_fit_validate():
-    """Run the program"""
-    args = parse_args()
-    for fname in args.files:
-        validate_file(fname)
+
+def show_errors(fname, errors):
+    """Show validation errors
+
+    Args:
+        fname: Filename containng the errors
+        errors: List of errors, each a string
+    """
+    print('%s:' % fname, file=sys.stderr)
+    for error in errors:
+        print(error, file=sys.stderr)
+    print(file=sys.stderr)
 
 
 def run_fit_validate(argv=None):
@@ -70,11 +77,11 @@ def run_fit_validate(argv=None):
     found_errors = False
     try:
         for fname in args.files:
-            errors = validator.Start([fname])
+            errors = validator.Start(fname)
             if errors:
                 found_errors = True
             if errors:
-                ShowErrors(fname, errors)
+                show_errors(fname, errors)
                 found_errors = True
     except ValueError as exc:
         if args.debug:
