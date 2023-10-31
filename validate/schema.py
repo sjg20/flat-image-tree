@@ -13,7 +13,7 @@ import copy
 from elements import NodeAny, NodeDesc, NodeModel, NodeSubmodel
 from elements import PropCustom, PropDesc, PropString, PropStringList
 from elements import PropPhandleTarget, PropPhandle, CheckPhandleTarget
-from elements import PropAny, PropFile
+from elements import PropAny, PropFile, PropTimestamp, PropAddressCells
 
 # Known directories for installation
 CRAS_CONFIG_DIR = '/etc/cras'
@@ -90,7 +90,10 @@ def ValidateSkuMap(val, prop):
 
 
 SCHEMA = NodeDesc('/', True, [
-    NodeDesc('chromeos', True, [
+    PropTimestamp('timestamp', True),
+    PropString('description', True),
+    PropAddressCells(True),
+    NodeDesc('images', True, [
         NodeDesc('family', True, [
             NodeDesc('audio', elements=[
                 NodeAny('', [PropPhandleTarget()] +
