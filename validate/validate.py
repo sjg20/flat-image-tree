@@ -155,7 +155,7 @@ class FdtValidator(object):
             True if this element is present, False if absent
         """
         if schema.conditional_props and parent_node:
-            for rel_name, value in schema.conditional_props.iteritems():
+            for rel_name, value in schema.conditional_props.items():
                 name = rel_name
                 schema_target = schema.parent
                 node_target = parent_node
@@ -164,8 +164,8 @@ class FdtValidator(object):
                     node_target = node_target.parent
                     name = name[3:]
                 parent_props = [e.name for e in schema_target.elements]
-                sibling_names = node_target.props.keys()
-                sibling_names += [n.name for n in node_target.subnodes.values()]
+                sibling_names = set(node_target.props.keys())
+                sibling_names |= set(n.name for n in node_target.subnodes)
                 if name in parent_props and value != (name in sibling_names):
                     return False
         return True

@@ -290,6 +290,29 @@ class PropAny(PropDesc):
             self.validator(val, prop)
 
 
+class PropOneOf(PropDesc):
+    """Allows selecting one of a variety of options
+
+    Properties:
+        validator: Function to call to validate this property
+    """
+    def __init__(self, name, required=False, options=[],
+                 conditional_props=None):
+        super().__init__(name, 'oneof', required, conditional_props)
+        self.options = options
+
+    def Validate(self, val, prop):
+        """Validator for this property
+
+        This should be a static method in FdtValidator.
+
+        Args:
+            val: FdtValidator object
+            prop: Prop object of the property
+        """
+        pass
+
+
 class NodeDesc(SchemaElement):
     """A generic node schema element (base class for nodes)"""
     def __init__(self, name, required=False, elements=None,

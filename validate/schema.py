@@ -14,6 +14,7 @@ from elements import NodeAny, NodeDesc, NodeConfig, NodeImage
 from elements import PropCustom, PropDesc, PropString, PropStringList
 from elements import PropPhandleTarget, PropPhandle, CheckPhandleTarget
 from elements import PropAny, PropInt, PropTimestamp, PropAddressCells, PropBool
+from elements import PropOneOf
 
 # Known directories for installation
 CRAS_CONFIG_DIR = '/etc/cras'
@@ -174,6 +175,17 @@ NodeDesc('mapping', False, [
         ]),
 '''
 
+'''
+PropOneOf('data-spec', True, options=[[
+    PropInt('data-offset', True),
+    PropInt('data-size', True),
+    ], [
+    PropDesc('data', True),
+    ],
+    ],
+),
+'''
+
 SCHEMA = NodeDesc('/', True, [
     PropTimestamp('timestamp', True),
     PropString('description', True),
@@ -185,8 +197,11 @@ SCHEMA = NodeDesc('/', True, [
             PropString('arch', True),
             PropString('type', True),
             PropString('compression'),
-            PropInt('data-offset', False),
-            PropInt('data-size', False),
+            PropInt('data-offset', True, conditional_props={'data': False}),
+            PropInt('data-size', True, conditional_props={'data': False}),
+            PropDesc('data', True,
+                     conditional_props={'data-offset': False,
+                                        'data-size': False}),
             PropString('os', True),
             PropInt('load'),
             PropString('project', True),
