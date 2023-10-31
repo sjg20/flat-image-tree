@@ -10,10 +10,10 @@ hierarchical way.
 
 import copy
 
-from elements import NodeAny, NodeDesc, NodeModel, NodeSubmodel
+from elements import NodeAny, NodeDesc, NodeConfig, NodeImage
 from elements import PropCustom, PropDesc, PropString, PropStringList
 from elements import PropPhandleTarget, PropPhandle, CheckPhandleTarget
-from elements import PropAny, PropFile, PropTimestamp, PropAddressCells
+from elements import PropAny, PropInt, PropTimestamp, PropAddressCells, PropBool
 
 # Known directories for installation
 CRAS_CONFIG_DIR = '/etc/cras'
@@ -23,6 +23,7 @@ LIB_FIRMWARE = '/lib/firmware'
 # Basic firmware schema, which is augmented depending on the situation.
 FW_COND = {'shares': False, '../whitelabel': False}
 
+'''
 BASE_FIRMWARE_SCHEMA = [
     PropString('bcs-overlay', True, 'overlay-.*', FW_COND),
     PropString('ec-image', False, r'bcs://.*\.tbz2', FW_COND),
@@ -66,7 +67,7 @@ BASE_AUDIO_NODE = [
 ]
 
 NOT_WL = {'whitelabel': False}
-
+'''
 
 @staticmethod
 def ValidateSkuMap(val, prop):
@@ -89,40 +90,35 @@ def ValidateSkuMap(val, prop):
                    (prop.name, sku_id))
 
 
-SCHEMA = NodeDesc('/', True, [
-    PropTimestamp('timestamp', True),
-    PropString('description', True),
-    PropAddressCells(True),
-    NodeDesc('images', True, [
-        NodeDesc('family', True, [
-            NodeDesc('audio', elements=[
-                NodeAny('', [PropPhandleTarget()] +
-                        copy.deepcopy(BASE_AUDIO_SCHEMA)),
-            ]),
-            NodeDesc('firmware', elements=[
-                PropString('script', True, r'updater4\.sh'),
-                NodeModel([
-                    PropPhandleTarget(),
-                    copy.deepcopy(BUILD_TARGETS_SCHEMA),
-                    ] + copy.deepcopy(BASE_FIRMWARE_SCHEMA))
-            ]),
-            NodeDesc('touch', False, [
-                NodeAny('', [
-                    PropPhandleTarget(),
-                    PropString('firmware-bin', True, ''),
-                    PropString('firmware-symlink', True, ''),
-                    PropString('vendor', True, ''),
-                ]),
-            ]),
-            NodeDesc('mapping', False, [
-                NodeAny(r'sku-map(@[0-9])?', [
-                    PropString('platform-name', False, ''),
-                    PropString('smbios-name-match', False, ''),
-                    PropPhandle('single-sku', '/chromeos/models/MODEL', False),
-                    PropCustom('simple-sku-map', ValidateSkuMap, False),
-                ]),
-            ]),
-        ]),
+'''
+NodeDesc('audio', elements=[
+    NodeAny('', [PropPhandleTarget()] +
+            copy.deepcopy(BASE_AUDIO_SCHEMA)),
+]),
+NodeDesc('firmware', elements=[
+    PropString('script', True, r'updater4\.sh'),
+    NodeModel([
+        PropPhandleTarget(),
+        copy.deepcopy(BUILD_TARGETS_SCHEMA),
+        ] + copy.deepcopy(BASE_FIRMWARE_SCHEMA))
+]),
+NodeDesc('touch', False, [
+    NodeAny('', [
+        PropPhandleTarget(),
+        PropString('firmware-bin', True, ''),
+        PropString('firmware-symlink', True, ''),
+        PropString('vendor', True, ''),
+    ]),
+]),
+NodeDesc('mapping', False, [
+    NodeAny(r'sku-map(@[0-9])?', [
+        PropString('platform-name', False, ''),
+        PropString('smbios-name-match', False, ''),
+        PropPhandle('single-sku', '/chromeos/models/MODEL', False),
+        PropCustom('simple-sku-map', ValidateSkuMap, False),
+    ]),
+]),
+
         NodeDesc('models', True, [
             NodeModel([
                 PropPhandleTarget(),
@@ -176,10 +172,41 @@ SCHEMA = NodeDesc('/', True, [
                 ], conditional_props=NOT_WL),
             ])
         ]),
-        NodeDesc('schema', False, [
-            NodeDesc('target-dirs', False, [
-                PropAny(),
-            ])
-        ])
-    ])
+'''
+
+SCHEMA = NodeDesc('/', True, [
+    PropTimestamp('timestamp', True),
+    PropString('description', True),
+    PropAddressCells(True),
+    NodeDesc('images', True, [
+        NodeImage(r'image-(\d)+', elements=[
+            PropString('description', True),
+            PropTimestamp('timestamp'),
+            PropString('arch', True),
+            PropString('type', True),
+            PropString('compression'),
+            PropInt('data-offset', False),
+            PropInt('data-size', False),
+            PropString('os', True),
+            PropInt('load'),
+            PropString('project', True),
+            PropStringList('capabilities', True),
+            PropString('producer'),
+            PropInt('uncomp-size'),
+            PropInt('entry-start', False),
+            PropInt('entry', False),
+            PropInt('reloc-start', False),
+        ]),
+    ]),
+    NodeDesc('configurations', True, [
+        PropString('default'),
+        NodeConfig(r'config-(\d)+', elements=[
+            PropString('description', True),
+            PropString('firmware', True),
+            PropString('fdt'),  # Add
+            PropStringList('loadables'),
+            PropStringList('compatible'),
+            PropBool('require-fit'),
+        ]),
+    ]),
 ])

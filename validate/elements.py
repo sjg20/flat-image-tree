@@ -95,8 +95,7 @@ class PropString(PropDesc):
     """
     def __init__(self, name, required=False, str_pattern='',
                              conditional_props=None):
-        super(PropString, self).__init__(name, 'string', required,
-                                                                         conditional_props)
+        super().__init__(name, 'string', required, conditional_props)
         self.str_pattern = str_pattern
 
     def Validate(self, val, prop):
@@ -110,16 +109,26 @@ class PropString(PropDesc):
                              (prop.name, prop.value, pattern))
 
 
-class PropTimestamp(PropDesc):
-    """A timestamp in u32 format"""
+class PropInt(PropDesc):
+    """Single-cell (32-bit) integer"""
     def __init__(self, name, required=False, conditional_props=None):
-        super().__init__(name, 'timestamp', required, conditional_props)
+        super().__init__(name, 'int', required, conditional_props)
 
     def Validate(self, val, prop):
         """Check the timestamp"""
         if prop.type != Type.INT:
             val.Fail(prop.node.path, "'%s' value '%s' must be a u32" %
                              (prop.name, prop.value))
+
+
+class PropTimestamp(PropInt):
+    """A timestamp in u32 format"""
+    def __init__(self, name, required=False, conditional_props=None):
+        super().__init__(name, required, conditional_props)
+
+    def Validate(self, val, prop):
+        """Check the timestamp"""
+        super().Validate(val, prop)
 
 
 class PropAddressCells(PropDesc):
@@ -137,6 +146,12 @@ class PropAddressCells(PropDesc):
         if val not in [1, 2]:
             val.Fail(prop._node.path, "'%s' value '%d' must be 1 or 2" %
                              (prop.name, val))
+
+
+class PropBool(PropDesc):
+    """Boolean property"""
+    def __init__(self, name, required=False, conditional_props=None):
+        super().__init__(name, 'bool', required, conditional_props)
 
 
 class PropFile(PropDesc):
@@ -217,8 +232,7 @@ class PropPhandle(PropDesc):
     """
     def __init__(self, name, target_path_match, required=False,
                              conditional_props=None):
-        super(PropPhandle, self).__init__(name, 'phandle', required,
-                                                                            conditional_props)
+        super().__init__(name, 'phandle', required, conditional_props)
         self.target_path_match = target_path_match
 
     def Validate(self, val, prop):
@@ -238,8 +252,7 @@ class PropCustom(PropDesc):
         validator: Function to call to validate this property
     """
     def __init__(self, name, validator, required=False, conditional_props=None):
-        super(PropCustom, self).__init__(name, 'custom', required,
-                                                                         conditional_props)
+        super().__init__(name, 'custom', required, conditional_props)
         self.validator = validator
 
     def Validate(self, val, prop):
@@ -323,3 +336,15 @@ class NodeAny(NodeDesc):
         if not m:
             val.Fail(node.path, "Node name '%s' does not match pattern '%s'" %
                              (node.name, pattern))
+
+
+class NodeImage(NodeAny):
+    """A FIT image node"""
+    def __init__(self, name_pattern, elements):
+        super().__init__(name_pattern=name_pattern, elements=elements)
+
+
+class NodeConfig(NodeAny):
+    """A FIT config node"""
+    def __init__(self, name_pattern, elements):
+        super().__init__(name_pattern=name_pattern, elements=elements)
