@@ -2,10 +2,10 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""Schema elements.
+"""Schema elements
 
 This module provides schema elements that can be used to build up a schema for
-validation of the master configuration
+validation of a devicetree.
 """
 
 import re
@@ -13,18 +13,20 @@ import re
 from dtoc.fdt import Type
 from dtoc import fdt_util
 
-def CheckPhandleTarget(val, target, target_path_match):
+def check_phandle_target(val, target, target_path_match):
     """Check that the target of a phandle matches a pattern
 
     Args:
         val: Validator (used for model list, etc.)
         target: Target node path (string)
-        target_path_match: Match string. This is the full path to the node that the
-                target must point to. Some 'wildcard' nodes are supported in the path:
+        target_path_match: Match string. This is the full path to the node that
+            the target must point to. Some 'wildcard' nodes are supported in the
+            path:
 
-                     MODEL - matches any model node
-                     SUBMODEL - matches any submodel when MODEL is earlier in the path
-                     ANY - matches any node
+                MODEL - matches any model node
+                SUBMODEL - matches any submodel when MODEL is earlier in the
+                    path
+                ANY - matches any node
 
     Returns:
         True if the target matches, False if not
@@ -32,8 +34,8 @@ def CheckPhandleTarget(val, target, target_path_match):
     model = None
     parts = target_path_match.split('/')
     target_parts = target.path.split('/')
-    ok = len(parts) == len(target_parts)
-    if ok:
+    valid = len(parts) == len(target_parts)
+    if valid:
         for i, part in enumerate(parts):
             if part == 'MODEL':
                 if target_parts[i] in val.model_list:
@@ -45,21 +47,23 @@ def CheckPhandleTarget(val, target, target_path_match):
             elif part == 'ANY':
                 continue
             if part != target_parts[i]:
-                ok = False
-    return ok
+                valid = False
+    return valid
 
 
-class SchemaElement(object):
+# pylint: disable=R0903
+class SchemaElement():
     """A schema element, either a property or a subnode
 
     Args:
         name: Name of schema eleent
         prop_type: String describing this property type
         required: True if this element is mandatory, False if optional
-        conditional_props: Properties which control whether this element is present.
-             Dict:
-                 key: name of controlling property
-                 value: True if the property must be present, False if it must be absent
+        conditional_props: Properties which control whether this element is
+            present. Dict:
+                key: name of controlling property
+                value: True if the property must be present, False if it must be
+                    absent
     """
     def __init__(self, name, prop_type, required=False, conditional_props=None):
         self.name = name
@@ -71,20 +75,17 @@ class SchemaElement(object):
     def validate(self, val, prop):
         """Validate the schema element against the given property.
 
-        This method is overridden by subclasses. It should call val.fail() if there
-        is a problem during validation.
+        This method is overridden by subclasses. It should call val.fail() if
+        there is a problem during validation.
 
         Args:
             val: FdtValidator object
             prop: Prop object of the property
         """
-        pass
 
 
 class PropDesc(SchemaElement):
     """A generic property schema element (base class for properties)"""
-    def __init__(self, name, prop_type, required=False, conditional_props=None):
-        super().__init__(name, prop_type, required, conditional_props)
 
 
 class PropString(PropDesc):
@@ -103,10 +104,11 @@ class PropString(PropDesc):
         if not self.str_pattern:
             return
         pattern = '^' + self.str_pattern + '$'
-        m = re.match(pattern, prop.value)
-        if not m:
-            val.fail(prop.node.path, "'%s' value '%s' does not match pattern '%s'" %
-                             (prop.name, prop.value, pattern))
+        val_m = re.match(pattern, prop.value)
+        if not val_m:
+            val.fail(
+                prop.node.path,
+                f"'{prop.name}' value '{prop.value}' does not match pattern '{pattern}'")
 
 
 class PropInt(PropDesc):
@@ -117,18 +119,13 @@ class PropInt(PropDesc):
     def validate(self, val, prop):
         """Check the timestamp"""
         if prop.type != Type.INT:
-            val.fail(prop.node.path, "'%s' value '%s' must be a u32" %
-                             (prop.name, prop.value))
+            val.fail(
+                prop.node.path,
+                f"'{prop.name}' value '{prop.value}' must be a u32")
 
 
 class PropTimestamp(PropInt):
     """A timestamp in u32 format"""
-    def __init__(self, name, required=False, conditional_props=None):
-        super().__init__(name, required, conditional_props)
-
-    def validate(self, val, prop):
-        """Check the timestamp"""
-        super().validate(val, prop)
 
 
 class PropAddressCells(PropDesc):
@@ -140,47 +137,19 @@ class PropAddressCells(PropDesc):
     def validate(self, val, prop):
         """Check the timestamp"""
         if prop.type != Type.INT:
-            val.fail(prop._node.path, "'%s' value '%s' must be a u32" %
-                             (prop.name, prop.value))
+            val.fail(
+                prop._node.path,
+                f"'{prop.name}' value '{prop.value}' must be a u32")
         val = fdt_util.fdt32_to_cpu(prop.value)
         if val not in [1, 2]:
-            val.fail(prop._node.path, "'%s' value '%d' must be 1 or 2" %
-                             (prop.name, val))
+            val.fail(prop._node.path,
+                     f"'{prop.name}' value '{val}' must be 1 or 2")
 
 
 class PropBool(PropDesc):
     """Boolean property"""
     def __init__(self, name, required=False, conditional_props=None):
         super().__init__(name, 'bool', required, conditional_props)
-
-
-class PropFile(PropDesc):
-    """A file property
-
-    This represents a file to be installed on the filesystem.
-
-    Properties:
-        target_dir: Target directory in the filesystem for files from this
-                property (e.g. '/etc/cras'). This is used to set the install directory
-                and keep it consistent across ebuilds (which use cros_config_host) and
-                init scripts (which use cros_config). The actual file written will be
-                relative to this.
-    """
-    def __init__(self, name, required=False, str_pattern='',
-                             conditional_props=None, target_dir=None):
-        super(PropFile, self).__init__(name, 'file', required, conditional_props)
-        self.str_pattern = str_pattern
-        self.target_dir = target_dir
-
-    def validate(self, val, prop):
-        """Check the filename with a regex"""
-        if not self.str_pattern:
-            return
-        pattern = '^' + self.str_pattern + '$'
-        m = re.match(pattern, prop.value)
-        if not m:
-            val.fail(prop.node.path, "'%s' value '%s' does not match pattern '%s'" %
-                             (prop.name, prop.value, pattern))
 
 
 class PropStringList(PropDesc):
@@ -193,8 +162,7 @@ class PropStringList(PropDesc):
     """
     def __init__(self, name, required=False, str_pattern='',
                              conditional_props=None):
-        super(PropStringList, self).__init__(name, 'stringlist', required,
-                                                                                 conditional_props)
+        super().__init__(name, 'stringlist', required, conditional_props)
         self.str_pattern = str_pattern
 
     def alidate(self, val, prop):
@@ -203,10 +171,11 @@ class PropStringList(PropDesc):
             return
         pattern = '^' + self.str_pattern + '$'
         for item in prop.value:
-            m = re.match(pattern, item)
-            if not m:
-                val.fail(prop.node.path, "'%s' value '%s' does not match pattern '%s'" %
-                                 (prop.name, item, pattern))
+            m_str = re.match(pattern, item)
+            if not m_str:
+                val.fail(
+                    prop.node.path,
+                    f"'{prop.name}' value '{item}' does not match pattern '{pattern}'")
 
 
 class PropPhandleTarget(PropDesc):
@@ -215,8 +184,8 @@ class PropPhandleTarget(PropDesc):
     A phandle target can be pointed to by another node using a phandle property.
     """
     def __init__(self, required=False, conditional_props=None):
-        super(PropPhandleTarget, self).__init__('phandle', 'phandle-target',
-                                                                                        required, conditional_props)
+        super().__init__('phandle', 'phandle-target', required,
+                         conditional_props)
 
 
 class PropPhandle(PropDesc):
@@ -228,7 +197,7 @@ class PropPhandle(PropDesc):
     Properties:
         target_path_match: String to use to validate the target of this phandle.
                 It is the full path to the node that it must point to. See
-                CheckPhandleTarget for details.
+                check_phandle_target for details.
     """
     def __init__(self, name, target_path_match, required=False,
                              conditional_props=None):
@@ -239,10 +208,11 @@ class PropPhandle(PropDesc):
         """Check that this phandle points to the correct place"""
         phandle = prop.GetPhandle()
         target = prop.fdt.LookupPhandle(phandle)
-        if not CheckPhandleTarget(val, target, self.target_path_match):
-            val.fail(prop.node.path, "Phandle '%s' targets node '%s' which does not "
-                             "match pattern '%s'" % (prop.name, target.path,
-                                                                             self.target_path_match))
+        if not check_phandle_target(val, target, self.target_path_match):
+            val.fail(
+                prop.node.path,
+                f"Phandle '{prop.name}' targets node '{target.path}' which does not "
+                f"match pattern '{self.target_path_match}'")
 
 
 class PropCustom(PropDesc):
@@ -274,7 +244,7 @@ class PropAny(PropDesc):
         validator: Function to call to validate this property
     """
     def __init__(self, validator=None):
-        super(PropAny, self).__init__('ANY', 'any')
+        super().__init__('ANY', 'any')
         self.validator = validator
 
     def validate(self, val, prop):
@@ -296,10 +266,10 @@ class PropOneOf(PropDesc):
     Properties:
         validator: Function to call to validate this property
     """
-    def __init__(self, name, required=False, options=[],
+    def __init__(self, name, required=False, options=None,
                  conditional_props=None):
         super().__init__(name, 'oneof', required, conditional_props)
-        self.options = options
+        self.options = options or []
 
     def validate(self, val, prop):
         """Validator for this property
@@ -310,20 +280,19 @@ class PropOneOf(PropDesc):
             val: FdtValidator object
             prop: Prop object of the property
         """
-        pass
+        # TODO
 
 
 class NodeDesc(SchemaElement):
     """A generic node schema element (base class for nodes)"""
     def __init__(self, name, required=False, elements=None,
                              conditional_props=None):
-        super(NodeDesc, self).__init__(name, 'node', required,
-                                                                     conditional_props)
+        super().__init__(name, 'node', required, conditional_props)
         self.elements = elements
         for element in elements:
             element.parent = self
 
-    def GetNodes(self):
+    def get_nodes(self):
         """Get a list of schema elements which are nodes
 
         Returns:
@@ -335,19 +304,19 @@ class NodeDesc(SchemaElement):
 class NodeModel(NodeDesc):
     """A generic node schema element (base class for nodes)"""
     def __init__(self, elements):
-        super(NodeModel, self).__init__('MODEL', elements=elements)
+        super().__init__('MODEL', elements=elements)
 
 
 class NodeSubmodel(NodeDesc):
     """A generic node schema element (base class for nodes)"""
     def __init__(self, elements):
-        super(NodeSubmodel, self).__init__('SUBMODEL', elements=elements)
+        super().__init__('SUBMODEL', elements=elements)
 
 
 class NodeAny(NodeDesc):
     """A generic node schema element (base class for nodes)"""
     def __init__(self, name_pattern, elements):
-        super(NodeAny, self).__init__('ANY', elements=elements)
+        super().__init__('ANY', elements=elements)
         self.name_pattern = name_pattern
 
     def validate(self, val, node):
@@ -355,10 +324,11 @@ class NodeAny(NodeDesc):
         if not self.name_pattern:
             return
         pattern = '^' + self.name_pattern + '$'
-        m = re.match(pattern, node.name)
-        if not m:
-            val.fail(node.path, "Node name '%s' does not match pattern '%s'" %
-                             (node.name, pattern))
+        m_name = re.match(pattern, node.name)
+        if not m_name:
+            val.fail(
+                node.path,
+                f"Node name '{node.name}' does not match pattern '{pattern}'")
 
 
 class NodeImage(NodeAny):

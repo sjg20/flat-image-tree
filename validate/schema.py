@@ -12,7 +12,7 @@ import copy
 
 from elements import NodeAny, NodeDesc, NodeConfig, NodeImage
 from elements import PropCustom, PropDesc, PropString, PropStringList
-from elements import PropPhandleTarget, PropPhandle, CheckPhandleTarget
+from elements import PropPhandleTarget, PropPhandle, check_phandle_target
 from elements import PropAny, PropInt, PropTimestamp, PropAddressCells, PropBool
 from elements import PropOneOf
 
@@ -82,8 +82,8 @@ def ValidateSkuMap(val, prop):
         sku_set.add(sku_id)
         phandle_val = fdt_util.fdt32_to_cpu(phandle)
         target = prop.fdt.LookupPhandle(phandle_val)
-        if (not CheckPhandleTarget(val, target, '/chromeos/models/MODEL') and
-            not CheckPhandleTarget(val, target,
+        if (not check_phandle_target(val, target, '/chromeos/models/MODEL') and
+            not check_phandle_target(val, target,
                                    '/chromeos/models/MODEL/submodels/SUBMODEL')):
             val.Fail(prop.node.path,
                    "Phandle '%s' sku-id %d must target a model or submodel'" %
