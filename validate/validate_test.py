@@ -5,14 +5,14 @@
 
 """Unit tests for the config validator"""
 
-from __future__ import print_function
-
 import os
 import subprocess
 import tempfile
+import unittest
 
-from . import validate_config
-
+import schema
+import validate
+from u_boot_pylib import tools
 
 HEADER = '''/dts-v1/;
 
@@ -390,7 +390,7 @@ DEFAULT_MODEL = '''
 };
 '''
 
-class UnitTests(cros_test_lib.TestCase):
+class UnitTests(unittest.TestCase):
     """Unit tests for FdtValidator
 
     Properties:
@@ -399,8 +399,12 @@ class UnitTests(cros_test_lib.TestCase):
             called through its command-line interface
     """
     def setUp(self):
-        self.val = validate_config.FdtValidator(validate_config.SCHEMA, False)
+        self.val = validate.FdtValidator(schema.SCHEMA, False)
         self.returncode = 0
+        tools.prepare_output_dir(None)
+
+    def tearDown(self):
+        tools.finalise_output_dir()
 
     def Run(self, dts_source, use_command_line=False, extra_options=None):
         """Run the validator with a single source file
@@ -414,58 +418,23 @@ class UnitTests(cros_test_lib.TestCase):
             extra_options: Extra command-line arguments to pass
         """
         dts = tempfile.NamedTemporaryFile(suffix='.dts', delete=False)
-        dts.write(dts_source)
+        dts.write(dts_source.encode('utf-8'))
         dts.close()
         self.returncode = 0
         if use_command_line:
             call_args = ['python', '-m', 'cros_config_host.validate_config',
-                                     '-d', dts.name]
+                         '-d', dts.name]
             if extra_options:
                 call_args += extra_options
             try:
-                output = subprocess.check_output(call_args, stderr=subprocess.STDOUT)
+                output = subprocess.check_output(call_args,
+                                                 stderr=subprocess.STDOUT)
             except subprocess.CalledProcessError as e:
                 output = e.output
                 self.returncode = e.returncode
             errors = output.strip().splitlines()
         else:
-            errors = self.val.Start([dts.name])
-        if errors:
-            return errors
-        if dts:
-            os.unlink(dts.name)
-        return []
-
-    def RunMultiple(self, dts_source_list, use_command_line=False):
-        """Run the validator with a list of .dtsi fragments
-
-        Args:
-            dts_source_list: List of strings, containing the device-tree source to
-                    process for each fragment
-            use_command_line: True to run through the command-line interface.
-                    Otherwise the imported validator class is used directly. When using
-                    the command-line interface, the return code is available in
-                    self.returncode, since only one test needs it.
-        """
-        dts_list = []
-        for source in dts_source_list:
-            dts = tempfile.NamedTemporaryFile(suffix='.dtsi', delete=False)
-            dts_list.append(dts)
-            dts.write(source)
-            dts.close()
-        fnames = [dts.name for dts in dts_list]
-        self.returncode = 0
-        if use_command_line:
-            call_args = ['python', '-m', 'cros_config_host.validate_config',
-                                     '-d', '-p'] + fnames
-            try:
-                output = subprocess.check_output(call_args, stderr=subprocess.STDOUT)
-            except subprocess.CalledProcessError as e:
-                output = e.output
-                self.returncode = e.returncode
-            errors = output.strip().splitlines()
-        else:
-            errors = self.val.Start(fnames, partial=True)
+            errors = self.val.start(dts.name)
         if errors:
             return errors
         if dts:
@@ -660,5 +629,6 @@ class UnitTests(cros_test_lib.TestCase):
         result = self.Run(HEADER + MODELS + FAMILY_FIRMWARE + DEFAULT_MODEL)
         self.assertEqual([], result)
 
+
 if __name__ == '__main__':
-    cros_test_lib.main(module=__name__)
+    unittest.main(module=__name__)

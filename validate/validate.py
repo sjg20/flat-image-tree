@@ -249,8 +249,8 @@ class FdtValidator():
         schema, needed = self.get_element(parent_schema, node.name, node.parent,
                                                                          NodeDesc)
         if not schema and needed:
-            elements = [e.name for e in parent_schema.GetNodes()
-                                    if self.element_present(e, node.parent)]
+            elements = [e.name for e in parent_schema.get_nodes()
+                        if self.element_present(e, node.parent)]
             self.fail(os.path.dirname(node.path),
                       f"Unexpected subnode '{node.name}', valid list is "
                       f"({', '.join(elements)})")
