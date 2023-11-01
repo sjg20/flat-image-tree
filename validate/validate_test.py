@@ -17,16 +17,24 @@ from u_boot_pylib import tools
 HEADER = '''/dts-v1/;
 
 / {
-    chromeos {
-        family: family {
+    timestamp = <123456>;
+    description = "This is my description";
+    #address-cells = <1>;
+    images {
+        image-1 {
+            description = "Image description";
+            arch = "arm64";
+            type = "kernel";
+            data = "abc";
+            os = "linux";
+            project = "linux";
         };
+    };
 
-        models: models {
-        };
-        schema {
-            target-dirs {
-                dptf-dv = "/etc/dptf";
-            };
+    configurations {
+        config-1 {
+            description = "Configuration description";
+            firmware = "image-1";
         };
     };
 };
@@ -406,7 +414,7 @@ class UnitTests(unittest.TestCase):
     def tearDown(self):
         tools.finalise_output_dir()
 
-    def Run(self, dts_source, use_command_line=False, extra_options=None):
+    def run_test(self, dts_source, use_command_line=False, extra_options=None):
         """Run the validator with a single source file
 
         Args:
@@ -466,7 +474,10 @@ class UnitTests(unittest.TestCase):
 
     def testBase(self):
         """Test a skeleton file"""
-        self.assertEqual([], self.Run(HEADER))
+        import tracemalloc
+
+        tracemalloc.start()
+        self.assertEqual([], self.run_test(HEADER))
 
     def testModels(self):
         """Test a skeleton file with models"""

@@ -31,7 +31,7 @@ SCHEMA = NodeDesc('/', True, [
             PropString('os', True),
             PropInt('load'),
             PropString('project', True),
-            PropStringList('capabilities', True),
+            PropStringList('capabilities'),
             PropString('producer'),
             PropInt('uncomp-size'),
             PropInt('entry-start', False),
