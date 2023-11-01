@@ -28,18 +28,13 @@ Unit tests can be run like this:
     python validate_config_unittest.py
 """
 
-import argparse
-import copy
-import itertools
 import os
-import re
-import sys
 
 from dtoc import fdt, fdt_util
 from elements import NodeAny, NodeDesc
 from elements import PropAny, PropDesc
 
-class FdtValidator(object):
+class FdtValidator():
     """Validator for the master configuration"""
     def __init__(self, schema, raise_on_error):
         """Master configuration validator.
@@ -71,11 +66,12 @@ class FdtValidator(object):
             location: fdt.Node object where the error occurred
             msg: Message to record for this failure
         """
-        self._errors.append('%s: %s' % (location, msg))
+        self._errors.append(f'{location}: {msg}')
         if self._raise_on_error:
             raise ValueError(self._errors[-1])
 
-    def _is_builtin_property(self, node, prop_name):
+    @staticmethod
+    def _is_builtin_property(node, prop_name):
         """Checks if a property is a built-in device-tree construct
 
         This checks for 'reg', '#address-cells' and '#size-cells' properties which
@@ -97,7 +93,8 @@ class FdtValidator(object):
                     return True
         return False
 
-    def element_present(self, schema, parent_node):
+    @staticmethod
+    def element_present(schema, parent_node):
         """Check whether a schema element should be present
 
         This handles the conditional_props feature. The list of names of sibling
@@ -136,33 +133,27 @@ class FdtValidator(object):
             schema: Schema element to check
             name: Name of element to find (string)
             node: Node containing the property (or for nodes, the parent node
-                    containing the subnode) we are looking up. None if none available
-            expected: The SchemaElement object that is expected. This can be NodeDesc
-                    if a node is expected, PropDesc if a property is expected, or None
-                    if either is fine.
+                containing the subnode) we are looking up. None if none
+                available
+            expected: The SchemaElement object that is expected. This can be
+                NodeDesc if a node is expected, PropDesc if a property is
+                expected, or None if either is fine.
 
         Returns:
             Tuple:
                 Schema for the node, or None if none found
                 True if the node should have schema, False if it can be ignored
-                        (because it is internal to the device-tree format)
+                    (because it is internal to the device-tree format)
         """
         for element in schema.elements:
             if not self.element_present(element, node):
                 continue
             if element.name == name:
                 return element, True
-            elif (self.model_list and isinstance(element, NodeModel) and
-                        name in self.model_list):
-                return element, True
-            elif self.submodel_list and isinstance(element, NodeSubmodel) and node:
-                m = re.match('/chromeos/models/([a-z0-9]+)/submodels', node.path)
-                if m and name in self.submodel_list[m.group(1)]:
-                    return element, True
-            elif ((expected is None or expected == NodeDesc) and
+            if ((expected is None or expected == NodeDesc) and
                         isinstance(element, NodeAny)):
                 return element, True
-            elif ((expected is None or expected == PropDesc) and
+            if ((expected is None or expected == PropDesc) and
                         isinstance(element, PropAny)):
                 return element, True
         if expected == PropDesc:
@@ -214,8 +205,10 @@ class FdtValidator(object):
                 if prop_name == 'phandle':
                     self.fail(node.path, 'phandle target not valid for this node')
                 elif not self._is_builtin_property(node, prop_name):
-                    self.fail(node.path, "Unexpected property '%s', valid list is (%s)" %
-                                        (prop_name, ', '.join(schema_props)))
+                    self.fail(
+                        node.path,
+                        f"Unexpected property '{prop_name}', valid list is "
+                        f"({', '.join(schema_props)})")
                 continue
             element.validate(self, node.props[prop_name])
 
@@ -225,7 +218,9 @@ class FdtValidator(object):
                     not self.element_present(element, node)):
                 continue
             if element.required and element.name not in node.props.keys():
-                self.fail(node.path, "Required property '%s' missing" % element.name)
+                self.fail(
+                    node.path,
+                    f"Required property '{element.name}' missing")
 
         # Check that any required subnodes are present
         subnode_names = [n.name for n in node.subnodes]
@@ -234,9 +229,9 @@ class FdtValidator(object):
                     or not self.element_present(element, node)):
                 continue
             if element.name not in subnode_names:
-                msg = "Missing subnode '%s'" % element.name
+                msg = f"Missing subnode '{element.name}'"
                 if subnode_names:
-                    msg += ' in %s' % ', '.join(subnode_names)
+                    msg += f" in {', '.join(subnode_names)}"
                 self.fail(node.path, msg)
 
     def get_schema(self, node, parent_schema):
@@ -257,8 +252,8 @@ class FdtValidator(object):
             elements = [e.name for e in parent_schema.GetNodes()
                                     if self.element_present(e, node.parent)]
             self.fail(os.path.dirname(node.path),
-                                "Unexpected subnode '%s', valid list is (%s)" %
-                                (node.name, ', '.join(elements)))
+                      f"Unexpected subnode '{node.name}', valid list is "
+                      f"({', '.join(elements)})")
         return schema
 
     def _validate_tree(self, node, parent_schema):
@@ -295,7 +290,6 @@ class FdtValidator(object):
         Returns:
             list of str: List of errors found
         """
-        tmpfile = None
         self.model_list = []
         self.submodel_list = {}
         self._errors = []
@@ -305,29 +299,3 @@ class FdtValidator(object):
         # Validate the entire master configuration
         self._validate_tree(self._fdt.GetRoot(), self._schema)
         return self._errors
-
-    @classmethod
-    def AddElementTargetDirectories(cls, target_dirs, parent):
-        if isinstance(parent, PropFile):
-            if parent.name in target_dirs:
-                if target_dirs[parent.name] != parent.target_dir:
-                    raise ValueError(
-                            "Path for element '%s' is inconsistent with previous path '%s'" %
-                            (parent.target_dir, target_dirs[parent.name]))
-            else:
-                target_dirs[parent.name] = parent.target_dir
-        if isinstance(parent, NodeDesc):
-            for element in parent.elements:
-                cls.AddElementTargetDirectories(target_dirs, element)
-
-    def get_target_directories(self):
-        """Gets a dict of directory targets for each PropFile property
-
-        Returns:
-            Dict:
-                key: Property name
-                value: Ansolute path for this property
-        """
-        target_dirs = {}
-        self.add_element_target_directories(target_dirs, self._schema)
-        return target_dirs

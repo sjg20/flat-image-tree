@@ -12,11 +12,10 @@ for FIT.
 import argparse
 import sys
 
-import libfdt
 import schema
 import validate
 
-def parse_args(args):
+def parse_args(argv):
     """Parse arguments to the program
 
     Args:
@@ -34,8 +33,7 @@ def parse_args(args):
     # parser.add_argument('-U', '--show-environment', action='store_true',
           # default=False, help='Show environment changes in summary')
 
-    return parser.parse_args()
-
+    return parser.parse_args(argv)
 
 def show_errors(fname, errors):
     """Show validation errors
@@ -44,7 +42,7 @@ def show_errors(fname, errors):
         fname: Filename containng the errors
         errors: List of errors, each a string
     """
-    print('%s:' % fname, file=sys.stderr)
+    print(f'{fname}:', file=sys.stderr)
     for error in errors:
         print(error, file=sys.stderr)
     print(file=sys.stderr)
@@ -75,7 +73,7 @@ def run_fit_validate(argv=None):
     except ValueError as exc:
         if args.debug:
             raise
-        print('Failed: %s' % e, file=sys.stderr)
+        print(f'Failed: {exc}', file=sys.stderr)
         found_errors = True
     if found_errors:
         sys.exit(1)
