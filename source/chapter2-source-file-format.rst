@@ -471,7 +471,7 @@ key-name-hint
     <name>.crt.
 
 sign-images
-    A list of images to sign, each being a property of the conf
+    An unsorted list of images to sign, each being a property of the conf
     node that contains them. The default is "kernel,fdt" which means that these
     two images will be looked up in the config and signed if present. This is
     used by mkimage to determine which images to sign.
@@ -483,7 +483,10 @@ value
 
 hashed-nodes
     A list of nodes which were :index:`hashed <pair: nodes; hashed>` by the
-    signer. Each is a string - the full path to node. A typical value might be::
+    signer. Each is a string - the full path to node. Since this property
+    is not itself protected by a hash, it serves only as a hint for the
+    signer and must not be relied upon by the loader for validation
+    purposes. A typical value might be::
 
 	hashed-nodes = "/", "/configurations/conf-1", "/images/kernel",
 	    "/images/kernel/hash-1", "/images/fdt-1",
