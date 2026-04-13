@@ -865,11 +865,11 @@ Rivest–Shamir–Adleman algorithm</p></td>
 </tr>
 <tr class="row-odd"><td><p>sha1,rsa3072</p></td>
 <td><p>384</p></td>
-<td><p>SHA1 hash signed with 3072-bit RSA</p></td>
+<td><p>SHA1 hash signed with 2048-bit RSA</p></td>
 </tr>
 <tr class="row-even"><td><p>sha1,rsa4096</p></td>
 <td><p>512</p></td>
-<td><p>SHA1 hash signed with 4096-bit RSA</p></td>
+<td><p>SHA1 hash signed with 2048-bit RSA</p></td>
 </tr>
 <tr class="row-odd"><td><p>sha1,ecdsa256</p></td>
 <td><p>32</p></td>
@@ -1674,6 +1674,20 @@ contains:</p>
 <li><p>the <code class="docutils literal notranslate"><span class="pre">dm-verity</span></code> sub-node of any <code class="docutils literal notranslate"><span class="pre">filesystem</span></code>-type image node that carries one
 (e.g. <code class="docutils literal notranslate"><span class="pre">/images/rootfs-1/dm-verity</span></code>).</p></li>
 </ul>
+<p>An image node is “referenced by the configuration” if it is named by
+any string property of the configuration node, except for the following
+properties which are excluded:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">description</span></code> - textual description of the configuration,</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">compatible</span></code> - board compatible string(s) used for configuration
+matching, and</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">default</span></code> - reserved name; not used on a configuration node itself.</p></li>
+</ul>
+<p>All other string properties are treated as image references and their
+named image nodes are added to the node list. For each such property,
+if no image node with the named unit name exists under <code class="docutils literal notranslate"><span class="pre">/images</span></code>, the
+property is skipped (a missing reference is not an error during node-list
+construction).</p>
 <p>The signer walks the FDT structure block sequentially and includes or excludes
 each token according to the following rules:</p>
 <dl class="simple">
