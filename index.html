@@ -734,14 +734,28 @@ not relative to the loading of the FIT. This is mandatory if
 </table>
 </dd>
 <dt>entry</dt><dd><p>Entry point address, address size is determined by
-‘#address-cells’ property of the root node.
-Mandatory for types: “firmware”, and “kernel”.</p>
+‘#address-cells’ property of the root node.</p>
+<p>When omitted, the bootloader uses the <code class="docutils literal notranslate"><span class="pre">load</span></code> address if present;
+otherwise it chooses an entry point appropriate for the image type
+and target platform. If the bootloader cannot determine a suitable
+entry point, it shall refuse to boot the image.</p>
 </dd>
 </dl>
 <dl id="prop-load">
 <dt>load</dt><dd><p>Load address, address size is determined by ‘#address-cells’
-property of the root node.
-Mandatory for types: “firmware”, and “kernel”.</p>
+property of the root node.</p>
+<p>When omitted, the bootloader chooses a load address appropriate for
+the image type and target platform (e.g. a free, suitably-aligned
+region of RAM). If the bootloader cannot determine a suitable load
+address, it shall refuse to boot the image.</p>
+<p>The bootloader is not required to use the in-FIT data address as
+the load address. Producers requiring a specific address shall set
+the <code class="docutils literal notranslate"><span class="pre">load</span></code> property explicitly. Image producers shall not rely on
+a particular fallback address being chosen by the bootloader;
+doing so creates a hidden coupling between the FIT layout and
+runtime behaviour, which breaks for inline FITs (where data
+alignment is constrained by the FDT structure) and for external
+FITs whose placement may vary.</p>
 </dd>
 <dt><span class="target" id="index-24"></span>compatible</dt><dd><p>Compatible method for loading image.
 Mandatory for types: “fpga”, and images that do not specify a load address.
@@ -1773,6 +1787,20 @@ contains:</p>
 <li><p>the <code class="docutils literal notranslate"><span class="pre">dm-verity</span></code> sub-node of any <code class="docutils literal notranslate"><span class="pre">filesystem</span></code>-type image node that carries one
 (e.g. <code class="docutils literal notranslate"><span class="pre">/images/rootfs-1/dm-verity</span></code>).</p></li>
 </ul>
+<p>An image node is “referenced by the configuration” if it is named by
+any string property of the configuration node, except for the following
+properties which are excluded:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">description</span></code> - textual description of the configuration,</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">compatible</span></code> - board compatible string(s) used for configuration
+matching, and</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">default</span></code> - reserved name; not used on a configuration node itself.</p></li>
+</ul>
+<p>All other string properties are treated as image references and their
+named image nodes are added to the node list. For each such property,
+if no image node with the named unit name exists under <code class="docutils literal notranslate"><span class="pre">/images</span></code>, the
+property is skipped (a missing reference is not an error during node-list
+construction).</p>
 <p>The signer walks the FDT structure block sequentially and includes or excludes
 each token according to the following rules:</p>
 <dl class="simple">
