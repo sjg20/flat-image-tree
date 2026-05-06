@@ -1883,7 +1883,6 @@ included in a configuration signature hash.</p>
             signature-1 {
                 algo = &quot;sha256,rsa2048&quot;;
                 key-name-hint = &quot;dev&quot;;
-                sign-images = &quot;kernel&quot;, &quot;fdt&quot;;
             };
         };
     };
@@ -1937,7 +1936,6 @@ resulting FIT looks like this:</p>
             signature-1 {
                 algo = &quot;sha256,rsa2048&quot;;
                 key-name-hint = &quot;dev&quot;;
-                sign-images = &quot;kernel&quot;, &quot;fdt&quot;;
                 value = &lt;...256-byte RSA-2048 signature...&gt;;
                 hashed-nodes = &quot;/&quot;, &quot;/configurations/conf-1&quot;,
                     &quot;/images/kernel&quot;, &quot;/images/kernel/hash-1&quot;,
@@ -2013,7 +2011,6 @@ or its parent is in the node list.</p>
             <strong>signature-1 {</strong>
                 algo = &quot;sha256,rsa2048&quot;;
                 key-name-hint = &quot;dev&quot;;
-                sign-images = &quot;kernel&quot;, &quot;fdt&quot;;
                 value = &lt;...256-byte RSA-2048 signature...&gt;;
                 hashed-nodes = &quot;/&quot;, &quot;/configurations/conf-1&quot;, ...;
                 hashed-strings = &lt;0x00000000 0x000000d4&gt;;
