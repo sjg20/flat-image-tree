@@ -734,28 +734,14 @@ not relative to the loading of the FIT. This is mandatory if
 </table>
 </dd>
 <dt>entry</dt><dd><p>Entry point address, address size is determined by
-‘#address-cells’ property of the root node.</p>
-<p>When omitted, the bootloader uses the <code class="docutils literal notranslate"><span class="pre">load</span></code> address if present;
-otherwise it chooses an entry point appropriate for the image type
-and target platform. If the bootloader cannot determine a suitable
-entry point, it shall refuse to boot the image.</p>
+‘#address-cells’ property of the root node.
+Mandatory for types: “firmware”, and “kernel”.</p>
 </dd>
 </dl>
 <dl id="prop-load">
 <dt>load</dt><dd><p>Load address, address size is determined by ‘#address-cells’
-property of the root node.</p>
-<p>When omitted, the bootloader chooses a load address appropriate for
-the image type and target platform (e.g. a free, suitably-aligned
-region of RAM). If the bootloader cannot determine a suitable load
-address, it shall refuse to boot the image.</p>
-<p>The bootloader is not required to use the in-FIT data address as
-the load address. Producers requiring a specific address shall set
-the <code class="docutils literal notranslate"><span class="pre">load</span></code> property explicitly. Image producers shall not rely on
-a particular fallback address being chosen by the bootloader;
-doing so creates a hidden coupling between the FIT layout and
-runtime behaviour, which breaks for inline FITs (where data
-alignment is constrained by the FDT structure) and for external
-FITs whose placement may vary.</p>
+property of the root node.
+Mandatory for types: “firmware”, and “kernel”.</p>
 </dd>
 <dt><span class="target" id="index-24"></span>compatible</dt><dd><p>Compatible method for loading image.
 Mandatory for types: “fpga”, and images that do not specify a load address.
@@ -2079,9 +2065,584 @@ private key to produce the signature <code class="docutils literal notranslate">
 </section>
 </section>
 </section>
+<section id="whole-fit-signing">
+<h3><span class="section-number">7.4. </span>Whole-FIT signing<a class="headerlink" href="#whole-fit-signing" title="Link to this heading">¶</a></h3>
+<p>Per-configuration signing covers the integrity of one configuration and
+the images it references. A FIT may additionally carry a <em>whole-FIT
+signature</em> over the entire FIT image, including the FDT and any
+external image data. Whole-FIT signing is intended to complement
+per-configuration signing, not to replace it.</p>
+<p>A whole-FIT signature is stored in the binary trailer (see
+<a class="reference internal" href="#document-chapter8-binary-trailer#chapter-binary-trailer"><span class="std std-ref">Binary Trailer</span></a>) as a <code class="docutils literal notranslate"><span class="pre">signature-N</span></code> property. The
+trailer is a constrained FDT blob placed inside the main FDT but
+excluded from the signed range, so its contents (including the
+signatures themselves) can be modified post-signing.</p>
+<section id="why-whole-fit-signing">
+<h4><span class="section-number">7.4.1. </span>Why whole-FIT signing<a class="headerlink" href="#why-whole-fit-signing" title="Link to this heading">¶</a></h4>
+<p>Per-configuration signing requires the bootloader to parse the FIT’s
+FDT before authentication: it must locate the configuration node, the
+referenced image nodes, and the signature node, then construct the
+node list and hash the relevant FDT structure bytes. The pre-auth
+parser is therefore a full FDT parser (e.g. libfdt), which is large
+and has historically been a source of bugs when fed adversarial
+input.</p>
+<p>Whole-FIT signing allows a bootloader to authenticate the FIT before
+parsing any FDT structure. The verifier reads a small number of
+fixed-offset fields, hashes a contiguous byte range, and checks the
+signature. Only after the signature verifies does the bootloader
+parse the FDT — and at that point it is operating on trusted bytes.</p>
+<p>Bootloaders that need a smaller pre-authentication attack surface
+should use whole-FIT signing. Bootloaders that already trust the FDT
+parser they use may continue to use per-configuration signing alone.
+A FIT may carry both, so a single image can serve both kinds of
+bootloader.</p>
+</section>
+<section id="what-is-signed">
+<h4><span class="section-number">7.4.2. </span>What is signed<a class="headerlink" href="#what-is-signed" title="Link to this heading">¶</a></h4>
+<p>A whole-FIT signature covers two byte ranges, in this order:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">0x28)</span></code> — the main FDT header (40 bytes). The trailer’s fixed
+<code class="docutils literal notranslate"><span class="pre">totalsize</span></code> keeps every header field stable, so the entire header
+is signed without exclusions. This authenticates the FDT’s
+internal layout (<code class="docutils literal notranslate"><span class="pre">totalsize</span></code>, <code class="docutils literal notranslate"><span class="pre">off_dt_struct</span></code>, <code class="docutils literal notranslate"><span class="pre">off_dt_strings</span></code>,
+<code class="docutils literal notranslate"><span class="pre">off_mem_rsvmap</span></code>) as well as the external data extent
+(<code class="docutils literal notranslate"><span class="pre">boot_cpuid_phys</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">[0x28</span> <span class="pre">+</span> <span class="pre">trailer_totalsize,</span> <span class="pre">totalsize</span> <span class="pre">+</span> <span class="pre">boot_cpuid_phys)</span></code> —
+the main FDT’s memreserve, structure and strings blocks, followed
+by all external image data.</p></li>
+</ol>
+<p>The trailer itself, <code class="docutils literal notranslate"><span class="pre">[0x28,</span> <span class="pre">0x28</span> <span class="pre">+</span> <span class="pre">trailer_totalsize)</span></code>, is excluded
+so that its mutable contents (UUIDs, signatures, counters) can be
+modified post-signing without invalidating the signature.</p>
+<p>See <a class="reference internal" href="#document-chapter8-binary-trailer#chapter-binary-trailer"><span class="std std-ref">Binary Trailer</span></a> for the byte-level details and
+verification procedure.</p>
+</section>
+<section id="relationship-to-per-configuration-signing">
+<h4><span class="section-number">7.4.3. </span>Relationship to per-configuration signing<a class="headerlink" href="#relationship-to-per-configuration-signing" title="Link to this heading">¶</a></h4>
+<p>Whole-FIT signing protects the FIT as a whole; per-configuration
+signing protects each configuration individually. They are
+complementary:</p>
+<ul class="simple">
+<li><p>A whole-FIT signature alone authenticates the FIT bytes but does
+not bind specific images to specific configurations. If the
+bootloader supports configuration selection by external means
+(e.g. board compatibility), per-configuration signing is still
+needed to prevent mix-and-match attacks within an authenticated
+FIT.</p></li>
+<li><p>Per-configuration signing alone provides the mix-and-match
+protection but requires a full FDT parser to be exposed to
+unauthenticated input.</p></li>
+<li><p>A FIT carrying both provides the strongest guarantees: the FDT is
+authenticated before it is parsed (whole-FIT) and individual
+configurations are bound to their image sets (per-configuration).</p></li>
+</ul>
+<p>The <code class="docutils literal notranslate"><span class="pre">compatible</span></code> property used for configuration matching is
+included in the configuration node and therefore covered by
+per-configuration signing, but not by whole-FIT signing in any
+distinguishing way (whole-FIT signing covers all FDT bytes
+indiscriminately). This means a bootloader relying solely on
+whole-FIT signing could still be tricked by attacker-modified
+<code class="docutils literal notranslate"><span class="pre">compatible</span></code> strings into selecting a different configuration than
+intended. Combining the two schemes closes this gap.</p>
+</section>
+<section id="multiple-signatures">
+<h4><span class="section-number">7.4.4. </span>Multiple signatures<a class="headerlink" href="#multiple-signatures" title="Link to this heading">¶</a></h4>
+<p>The trailer can carry multiple <code class="docutils literal notranslate"><span class="pre">signature-N</span></code> properties for key
+rotation, multi-party signing or algorithm migration. All
+signatures cover the same byte ranges; they differ only in
+algorithm and key. Bootloader policy determines whether a single
+valid signature is sufficient or whether all must verify.</p>
+</section>
+<section id="threat-model">
+<h4><span class="section-number">7.4.5. </span>Threat model<a class="headerlink" href="#threat-model" title="Link to this heading">¶</a></h4>
+<p>This subsection summarises what whole-FIT signing protects against
+and what it does not, and how it compares to per-configuration
+signing.</p>
+<section id="what-whole-fit-signing-protects-against">
+<h5><span class="section-number">7.4.5.1. </span>What whole-FIT signing protects against<a class="headerlink" href="#what-whole-fit-signing-protects-against" title="Link to this heading">¶</a></h5>
+<ul class="simple">
+<li><p><strong>Tampering with FDT content.</strong> Any modification to the main
+FDT’s structure, strings or memreserve blocks changes bytes in
+the signed range, invalidating the signature.</p></li>
+<li><p><strong>Tampering with external image data.</strong> The signed range extends
+to <code class="docutils literal notranslate"><span class="pre">totalsize</span> <span class="pre">+</span> <span class="pre">boot_cpuid_phys</span></code>, covering all external image
+data.</p></li>
+<li><p><strong>FDT-pointer redirection.</strong> <code class="docutils literal notranslate"><span class="pre">totalsize</span></code>, <code class="docutils literal notranslate"><span class="pre">off_dt_struct</span></code>,
+<code class="docutils literal notranslate"><span class="pre">off_dt_strings</span></code> and <code class="docutils literal notranslate"><span class="pre">off_mem_rsvmap</span></code> are all in the signed
+FDT header. An attacker cannot redirect an FDT consumer to parse
+attacker-controlled bytes by manipulating these fields.</p></li>
+<li><p><strong>Truncation and extension.</strong> <code class="docutils literal notranslate"><span class="pre">totalsize</span></code> and
+<code class="docutils literal notranslate"><span class="pre">boot_cpuid_phys</span></code> are signed, so an attacker cannot shrink the
+apparent extent of the FIT to excise content from the hash, nor
+extend it to smuggle data into a verified region.</p></li>
+<li><p><strong>Bit rot in regions not covered by per-configuration signing.</strong>
+Per-configuration signing is selective and does not hash, for
+example, configuration nodes other than the one being signed,
+unreferenced image nodes, or the FDT’s strings block tail.
+Whole-FIT signing covers all of these as raw bytes.</p></li>
+<li><p><strong>Adversarial input to a full FDT parser.</strong> A bootloader can
+verify the whole-FIT signature using only a small fixed-offset
+reader, before invoking libfdt or any equivalent. This shrinks
+the pre-authentication attack surface to the verifier itself
+plus the constrained-FDT trailer parser.</p></li>
+</ul>
+</section>
+<section id="what-whole-fit-signing-does-not-protect-against">
+<h5><span class="section-number">7.4.5.2. </span>What whole-FIT signing does <em>not</em> protect against<a class="headerlink" href="#what-whole-fit-signing-does-not-protect-against" title="Link to this heading">¶</a></h5>
+<ul class="simple">
+<li><p><strong>Mix-and-match attacks within an authenticated FIT.</strong> Whole-FIT
+signing certifies the FDT bytes as a whole, but it does not bind
+specific images to specific configurations. A bootloader that
+verifies only the whole-FIT signature and then chooses a
+configuration based on, for example, <code class="docutils literal notranslate"><span class="pre">compatible</span></code> matching can
+still be tricked into selecting an attacker-favoured
+configuration if the FIT genuinely contains multiple
+configurations and the attacker controls the matching input.
+Per-configuration signing is required to prevent this.</p></li>
+<li><p><strong>Modification of the trailer.</strong> The trailer (UUIDs, signatures,
+counters) is intentionally excluded from the signed range. An
+attacker with write access to the boot medium can modify trailer
+contents freely. Trailer values used for security-relevant
+decisions (e.g. install UUIDs influencing update targeting) shall
+be cross-checked against an authenticated source.</p></li>
+<li><p><strong>Downgrade attacks against the signing scheme itself.</strong> If the
+bootloader policy is “verify a whole-FIT signature if one is
+present, otherwise allow the FIT to boot”, an attacker can strip
+the trailer’s signatures (or the trailer entirely) to bypass
+whole-FIT verification. The defence is at policy level: a
+bootloader requiring whole-FIT signing must not fall back to
+unsigned operation. <code class="docutils literal notranslate"><span class="pre">boot_cpuid_phys</span></code> and the FDT magic are
+both signed, so a downgrade attack must work at the policy
+layer, not the format layer.</p></li>
+<li><p><strong>Rollback and replay.</strong> Neither whole-FIT signing nor
+per-configuration signing prevents an attacker from booting a
+previously valid (but now superseded) FIT. Anti-rollback
+requires an authenticated version counter, typically held in
+hardware (e.g. fuses) and checked by the bootloader against a
+signed version field in the FIT.</p></li>
+<li><p><strong>Compromise of the signing key.</strong> Whole-FIT signing inherits
+the security of the signature algorithm and key management. Key
+rotation is supported via multiple <code class="docutils literal notranslate"><span class="pre">signature-N</span></code> properties,
+but an attacker who obtains a valid private key can produce
+authentic-looking FITs.</p></li>
+</ul>
+</section>
+<section id="comparison-with-per-configuration-signing">
+<h5><span class="section-number">7.4.5.3. </span>Comparison with per-configuration signing<a class="headerlink" href="#comparison-with-per-configuration-signing" title="Link to this heading">¶</a></h5>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Threat</p></th>
+<th class="head"><p>Per-config</p></th>
+<th class="head"><p>Whole-FIT</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>FDT content tampering</p></td>
+<td><p>Selective</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>External image data tampering</p></td>
+<td><p>Via hash node</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-even"><td><p>Mix-and-match within FIT</p></td>
+<td><p>Yes</p></td>
+<td><p>No</p></td>
+</tr>
+<tr class="row-odd"><td><p>FDT-pointer redirection</p></td>
+<td><p>Indirect</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-even"><td><p>File truncation / extension</p></td>
+<td><p>No</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>Pre-auth parser attack surface</p></td>
+<td><p>libfdt</p></td>
+<td><p>Trivial</p></td>
+</tr>
+</tbody>
+</table>
+<p>The two schemes are complementary. A FIT carrying both gets the
+mix-and-match resistance of per-configuration signing and the
+small pre-authentication attack surface of whole-FIT signing.</p>
+</section>
+</section>
+</section>
+</section>
+<span id="document-chapter8-binary-trailer"></span><section id="binary-trailer">
+<span id="chapter-binary-trailer"></span><h2><span class="section-number">8. </span>Binary Trailer<a class="headerlink" href="#binary-trailer" title="Link to this heading">¶</a></h2>
+<section id="introduction">
+<h3><span class="section-number">8.1. </span>Introduction<a class="headerlink" href="#introduction" title="Link to this heading">¶</a></h3>
+<p>A FIT may carry a <em>binary trailer</em> placed immediately after the
+FIT’s FDT header. The trailer holds data that is intentionally not
+covered by FIT signatures, including:</p>
+<ul class="simple">
+<li><p>mutable per-installation metadata that must be updatable without
+re-signing the FIT (e.g. an installation UUID), and</p></li>
+<li><p>detached signatures that gate verification of the rest of the FIT
+and therefore cannot live inside the data they sign.</p></li>
+</ul>
+<p>The trailer is a self-contained FDT blob restricted to a profile that
+allows it to be parsed before authentication by a small, auditable
+parser. This avoids exposing a general-purpose FDT parser to
+adversarial input while reusing the FDT format for tooling and
+extensibility.</p>
+<p>The trailer is <strong>fixed in size and position</strong> at producer time. Its
+internal contents are mutable post-signing — installation tooling
+can add, remove or modify properties — but the trailer’s overall
+<code class="docutils literal notranslate"><span class="pre">totalsize</span></code> does not change. This stability is what allows whole-
+FIT signing to cover the FIT as a single contiguous byte range
+without having to exclude any FDT header fields. Producers
+pre-allocate enough trailer space (e.g. 4 KiB) to accommodate
+expected modifications; the unused space is held as
+<a class="reference internal" href="#trailer-padding"><span class="std std-ref">padding</span></a>.</p>
+<p>Placing the trailer in the file prefix means a consumer can read and
+validate it without seeking past the rest of the FDT or the external
+image data. This is useful for streaming, network boot and A/B slot
+selection, where a peek at trailer metadata may inform whether to
+fetch the rest of the FIT.</p>
+</section>
+<section id="location">
+<h3><span class="section-number">8.2. </span>Location<a class="headerlink" href="#location" title="Link to this heading">¶</a></h3>
+<p>The trailer occupies the bytes immediately after the FIT’s FDT
+header. For FDT version 17 (the version mandated by FIT, see
+<a class="reference internal" href="#document-chapter5-source-file-format#chapter-source-file-format"><span class="std std-ref">Flattened Image Tree (FIT) Format</span></a>) the FDT header is <code class="docutils literal notranslate"><span class="pre">0x28</span></code> bytes
+long, so the trailer starts at file offset <code class="docutils literal notranslate"><span class="pre">0x28</span></code>. The main FDT’s
+<code class="docutils literal notranslate"><span class="pre">off_mem_rsvmap</span></code>, <code class="docutils literal notranslate"><span class="pre">off_dt_struct</span></code> and <code class="docutils literal notranslate"><span class="pre">off_dt_strings</span></code> fields
+all advance past the trailer so that libfdt sees a valid FDT.</p>
+<p>This specification assumes the FDT v17 header size of <code class="docutils literal notranslate"><span class="pre">0x28</span></code>
+bytes. All references to <code class="docutils literal notranslate"><span class="pre">0x28</span></code> in this chapter are
+<code class="docutils literal notranslate"><span class="pre">sizeof(struct</span> <span class="pre">fdt_header)</span></code> for v17. If a future FDT specification
+defines a larger header, this trailer scheme would need a
+corresponding update; <code class="docutils literal notranslate"><span class="pre">0x28</span></code> is treated as a fixed constant here
+to keep the pre-authentication parser simple.</p>
+<p>A consumer locates the trailer as follows:</p>
+<ol class="arabic simple">
+<li><p>Read four bytes at offset <code class="docutils literal notranslate"><span class="pre">0x28</span></code>. If the value is not the FDT
+magic (<code class="docutils literal notranslate"><span class="pre">0xd00dfeed</span></code>), no trailer is present.</p></li>
+<li><p>Otherwise, read the trailer’s own FDT header and obtain its
+<code class="docutils literal notranslate"><span class="pre">totalsize</span></code>.</p></li>
+<li><p>Verify that <code class="docutils literal notranslate"><span class="pre">0x28</span> <span class="pre">+</span> <span class="pre">trailer_totalsize</span></code> is not greater than
+<code class="docutils literal notranslate"><span class="pre">totalsize</span></code> (the main FDT’s totalsize, which encompasses the
+trailer).</p></li>
+</ol>
+<p>The main FDT therefore looks like this:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>offset 0     0x28          0x28+T                      totalsize
+       |     |             |                           |
+       v     v             v                           v
+       [hdr] [trailer FDT] [memrsv | struct | strings]
+</pre></div>
+</div>
+<p>External image data follows the main FDT, and <code class="docutils literal notranslate"><span class="pre">boot_cpuid_phys</span></code>
+in the FDT header records its size:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>offset 0                 totalsize    totalsize + boot_cpuid_phys
+       |                 |            |
+       v                 v            v
+       [main FDT, including trailer]  [external image data]
+</pre></div>
+</div>
+<section id="compatibility-with-existing-fits">
+<h4><span class="section-number">8.2.1. </span>Compatibility with existing FITs<a class="headerlink" href="#compatibility-with-existing-fits" title="Link to this heading">¶</a></h4>
+<p>This scheme is designed to be safe to apply to any FIT:</p>
+<ul class="simple">
+<li><p>A pre-existing FIT (no trailer) has its memreserve block
+immediately after the FDT header at offset <code class="docutils literal notranslate"><span class="pre">0x28</span></code>. The
+consumer reads four bytes at <code class="docutils literal notranslate"><span class="pre">0x28</span></code>, sees the start of the
+memreserve block (which begins with the high 32 bits of an
+address — almost always zero), fails the magic check, and
+concludes correctly that no trailer is present.</p></li>
+<li><p>A new-style FIT carries a real trailer at <code class="docutils literal notranslate"><span class="pre">0x28</span></code>, identified
+by FDT magic. The main FDT’s <code class="docutils literal notranslate"><span class="pre">off_mem_rsvmap</span></code> points past the
+trailer to where the memreserve block actually begins.</p></li>
+</ul>
+<p>A consumer that does not understand the trailer scheme parses the
+FDT in the standard way using <code class="docutils literal notranslate"><span class="pre">off_mem_rsvmap</span></code>, <code class="docutils literal notranslate"><span class="pre">off_dt_struct</span></code>
+and <code class="docutils literal notranslate"><span class="pre">off_dt_strings</span></code>, and never inspects the bytes between the
+header and the memreserve block. Such a consumer remains compatible
+with FITs that carry a trailer.</p>
+<p>Producers must update <code class="docutils literal notranslate"><span class="pre">off_mem_rsvmap</span></code>, <code class="docutils literal notranslate"><span class="pre">off_dt_struct</span></code> and
+<code class="docutils literal notranslate"><span class="pre">off_dt_strings</span></code> to skip past the trailer when emitting one.
+<code class="docutils literal notranslate"><span class="pre">totalsize</span></code> must also encompass the trailer.</p>
+<p>The trailer is <strong>outside the signed regions of the FIT</strong> (see
+<a class="reference internal" href="#whole-fit-signing">Whole-FIT signing</a> below) and is therefore unsigned. A consumer
+shall apply its own validation policy before relying on any value
+read from the trailer.</p>
+</section>
+<section id="external-data-size">
+<h4><span class="section-number">8.2.2. </span>External data size<a class="headerlink" href="#external-data-size" title="Link to this heading">¶</a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">boot_cpuid_phys</span></code> field of the main FDT header (offset
+<code class="docutils literal notranslate"><span class="pre">0x1c</span></code>, four bytes, big-endian) carries the size of the external
+data region in bytes — the number of bytes after the main FDT’s
+<code class="docutils literal notranslate"><span class="pre">totalsize</span></code> that contain externally stored image data. FIT does
+not otherwise use this field. A FIT with no external data sets it
+to zero.</p>
+<p>This value is required for whole-FIT signing because it defines the
+extent of the authenticated content. Producers that emit a
+whole-FIT signature shall set <code class="docutils literal notranslate"><span class="pre">boot_cpuid_phys</span></code> accurately.</p>
+<p>Because the field is 32 bits, the external data region is limited
+to 4 GiB. A FIT with more than 4 GiB of external data cannot use
+whole-FIT signing under this scheme. In practice this is not a
+constraint, since FITs of that size are rare.</p>
+</section>
+</section>
+<section id="constrained-fdt-profile">
+<h3><span class="section-number">8.3. </span>Constrained FDT profile<a class="headerlink" href="#constrained-fdt-profile" title="Link to this heading">¶</a></h3>
+<p>The trailer is a valid FDT but restricted to the profile defined
+below. A producer that emits a trailer shall conform to this profile;
+a consumer shall reject any trailer that does not.</p>
+<section id="header">
+<h4><span class="section-number">8.3.1. </span>Header<a class="headerlink" href="#header" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">magic</span></code> shall be <code class="docutils literal notranslate"><span class="pre">0xd00dfeed</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">version</span></code> shall be <code class="docutils literal notranslate"><span class="pre">17</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">last_comp_version</span></code> shall be <code class="docutils literal notranslate"><span class="pre">17</span></code> or less.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">totalsize</span></code> shall be at most 65536 bytes.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">off_mem_rsvmap</span></code> shall equal <code class="docutils literal notranslate"><span class="pre">sizeof(struct</span> <span class="pre">fdt_header)</span></code> (<code class="docutils literal notranslate"><span class="pre">0x28</span></code>).</p></li>
+<li><p>The structure block and strings block shall not overlap each other,
+the FDT header, or the memory reservation block.</p></li>
+<li><p>All offsets and sizes shall fit within <code class="docutils literal notranslate"><span class="pre">totalsize</span></code>.</p></li>
+</ul>
+</section>
+<section id="memory-reservation-block">
+<h4><span class="section-number">8.3.2. </span>Memory reservation block<a class="headerlink" href="#memory-reservation-block" title="Link to this heading">¶</a></h4>
+<p>The memory reservation block shall contain exactly one entry: the
+16-byte all-zero terminator. The trailer shall not carry memory
+reservations.</p>
+</section>
+<section id="structure-block">
+<h4><span class="section-number">8.3.3. </span>Structure block<a class="headerlink" href="#structure-block" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>The trailer contains a single root node.</p></li>
+<li><p>The root node carries properties only. Sub-nodes are not permitted.</p></li>
+<li><p>The root node’s unit name shall be the empty string.</p></li>
+<li><p>Allowed tokens are <code class="docutils literal notranslate"><span class="pre">FDT_BEGIN_NODE</span></code>, <code class="docutils literal notranslate"><span class="pre">FDT_END_NODE</span></code>, <code class="docutils literal notranslate"><span class="pre">FDT_PROP</span></code>,
+<code class="docutils literal notranslate"><span class="pre">FDT_NOP</span></code> and <code class="docutils literal notranslate"><span class="pre">FDT_END</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">FDT_NOP</span></code> tokens are permitted anywhere and shall be skipped by
+the parser.</p></li>
+<li><p>Each property name offset shall point inside the strings block and
+shall reference a null-terminated string.</p></li>
+</ul>
+</section>
+<section id="strings-block">
+<h4><span class="section-number">8.3.4. </span>Strings block<a class="headerlink" href="#strings-block" title="Link to this heading">¶</a></h4>
+<p>A standard FDT strings block. No additional constraints beyond those
+implied by the property-name rule above.</p>
+</section>
+<section id="phandles-aliases-chosen">
+<h4><span class="section-number">8.3.5. </span>Phandles, aliases, <code class="docutils literal notranslate"><span class="pre">/chosen</span></code><a class="headerlink" href="#phandles-aliases-chosen" title="Link to this heading">¶</a></h4>
+<p>Not used. The trailer carries no nodes other than the root, so
+phandle-based references are meaningless in this context.</p>
+</section>
+<section id="padding-for-in-place-modification">
+<span id="trailer-padding"></span><h4><span class="section-number">8.3.6. </span>Padding for in-place modification<a class="headerlink" href="#padding-for-in-place-modification" title="Link to this heading">¶</a></h4>
+<p>The trailer’s <code class="docutils literal notranslate"><span class="pre">totalsize</span></code> is fixed at producer time and shall not
+change after signing. Producers should allocate the trailer
+generously to leave room for future modifications. Unused space
+within the trailer takes one of two forms:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">FDT_NOP</span></code> tokens at the end of the structure block. These are
+consumed by the parser as no-ops and may be replaced by
+<code class="docutils literal notranslate"><span class="pre">FDT_PROP</span></code> tokens when adding properties.</p></li>
+<li><p>Unused bytes after the strings block, before <code class="docutils literal notranslate"><span class="pre">totalsize</span></code>.
+These accommodate growth of the strings block when new property
+names are added.</p></li>
+</ul>
+<p>A producer that wishes to permit later in-place modification shall
+ensure that both forms of padding are available. Tooling that
+modifies the trailer (e.g. <code class="docutils literal notranslate"><span class="pre">fdtput</span></code> to stamp <code class="docutils literal notranslate"><span class="pre">install-uuid</span></code>)
+shall consume from these padding regions rather than changing
+<code class="docutils literal notranslate"><span class="pre">totalsize</span></code>.</p>
+<p>A FIT that runs out of trailer space cannot be modified in place.
+Such a FIT must be reissued with a larger trailer, which requires
+re-signing.</p>
+</section>
+</section>
+<section id="parser-requirements">
+<h3><span class="section-number">8.4. </span>Parser requirements<a class="headerlink" href="#parser-requirements" title="Link to this heading">¶</a></h3>
+<p>A consumer parsing the trailer before authentication shall use a
+parser with the following properties:</p>
+<ul class="simple">
+<li><p>No dynamic memory allocation.</p></li>
+<li><p>No recursion.</p></li>
+<li><p>All offsets and lengths bounds-checked against <code class="docutils literal notranslate"><span class="pre">totalsize</span></code>.</p></li>
+<li><p>A hard upper bound on input size of 65536 bytes.</p></li>
+<li><p>Rejects any input that violates the profile above.</p></li>
+</ul>
+<p>A reference implementation in approximately 200 lines of C is
+available; see issue #48 in the upstream repository. Implementations
+are encouraged to use this or a similarly minimal parser, rather than
+a general-purpose FDT library, to limit the attack surface exposed to
+unauthenticated input.</p>
+<p>A consumer that does not require trailer contents may ignore the
+trailer entirely. The trailer is optional; absence is signalled by
+the absence of the FDT magic at offset <code class="docutils literal notranslate"><span class="pre">0x28</span></code>.</p>
+</section>
+<section id="producer-behaviour">
+<h3><span class="section-number">8.5. </span>Producer behaviour<a class="headerlink" href="#producer-behaviour" title="Link to this heading">¶</a></h3>
+<p>Producers (e.g. mkimage) shall emit trailers conforming to the
+profile above. In particular, producers shall not invoke libfdt
+operations that may introduce sub-nodes, memory reservations or
+other features outside the profile.</p>
+<p>When emitting a trailer, the producer shall:</p>
+<ul class="simple">
+<li><p>Place the trailer at file offset <code class="docutils literal notranslate"><span class="pre">0x28</span></code>, immediately after the
+main FDT header.</p></li>
+<li><p>Choose a fixed trailer <code class="docutils literal notranslate"><span class="pre">totalsize</span></code>, generous enough to
+accommodate expected post-signing modifications.</p></li>
+<li><p>Pad the trailer’s structure and strings blocks as described in
+<a class="reference internal" href="#trailer-padding"><span class="std std-ref">Padding for in-place modification</span></a>.</p></li>
+<li><p>Update the main FDT’s <code class="docutils literal notranslate"><span class="pre">totalsize</span></code> to encompass the trailer.</p></li>
+<li><p>Update <code class="docutils literal notranslate"><span class="pre">off_mem_rsvmap</span></code>, <code class="docutils literal notranslate"><span class="pre">off_dt_struct</span></code> and <code class="docutils literal notranslate"><span class="pre">off_dt_strings</span></code>
+to skip past the trailer.</p></li>
+</ul>
+<p>The trailer’s <code class="docutils literal notranslate"><span class="pre">totalsize</span></code> shall not change after signing.</p>
+<p>Producers shall not invoke <code class="docutils literal notranslate"><span class="pre">fdt_open_into()</span></code> or equivalent
+operations that re-pack the main FDT, as these will overwrite the
+trailer region.</p>
+<p>Standard FDT tooling (<code class="docutils literal notranslate"><span class="pre">fdtget</span></code>, <code class="docutils literal notranslate"><span class="pre">fdtput</span></code>, <code class="docutils literal notranslate"><span class="pre">fdtdump</span></code>) operating
+on a trailer-only FDT remains conforming as long as no sub-nodes
+are added and the trailer’s <code class="docutils literal notranslate"><span class="pre">totalsize</span></code> is preserved. <code class="docutils literal notranslate"><span class="pre">fdtput</span></code>
+operating on the trailer in place will consume padding to absorb
+size changes. Installation tooling may use it to stamp values such
+as <code class="docutils literal notranslate"><span class="pre">install-uuid</span></code>.</p>
+</section>
+<section id="defined-trailer-properties">
+<h3><span class="section-number">8.6. </span>Defined trailer properties<a class="headerlink" href="#defined-trailer-properties" title="Link to this heading">¶</a></h3>
+<p>The following property names are defined by this specification.
+Other property names in the trailer’s root node are reserved for
+future revisions; consumers shall skip unknown properties without
+treating them as an error.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">vendor-</span></code> prefix is reserved for vendor-defined properties
+that will never be standardised by this specification.</p>
+<dl>
+<dt>install-uuid</dt><dd><p>A 16-byte RFC 4122 UUID identifying a particular installation
+of this FIT on persistent storage.</p>
+<p>Installation tooling stamps a fresh UUID at install time. An
+all-zero value (16 bytes of <code class="docutils literal notranslate"><span class="pre">0x00</span></code>) is the build-time
+placeholder; consumers shall treat it as if the property is
+absent.</p>
+<p>The value is not integrity-protected. Systems that use it for
+update-critical decisions (e.g. selecting an update target
+partition) shall cross-check it against an authenticated source.</p>
+</dd>
+<dt>signature-N</dt><dd><p>An opaque byte sequence carrying a detached signature over the
+FIT’s content, excluding the trailer itself. The exact byte
+ranges are defined in <a class="reference internal" href="#whole-fit-signing">Whole-FIT signing</a>.</p>
+<p>Multiple signatures are supported via the suffix <code class="docutils literal notranslate"><span class="pre">N</span></code>, which
+is a positive integer starting at <code class="docutils literal notranslate"><span class="pre">1</span></code>. A FIT carrying a single
+signature uses <code class="docutils literal notranslate"><span class="pre">signature-1</span></code>; further signatures use
+<code class="docutils literal notranslate"><span class="pre">signature-2</span></code>, <code class="docutils literal notranslate"><span class="pre">signature-3</span></code> and so on. Numbers shall be
+contiguous starting from <code class="docutils literal notranslate"><span class="pre">1</span></code>; consumers stop enumerating at
+the first missing number.</p>
+<p>Multiple signatures support key rotation, multi-party signing
+and algorithm migration. All signatures cover the same byte
+ranges; they differ only in algorithm and key.</p>
+<p>Bootloader policy determines whether one valid signature is
+sufficient (try each in turn until one succeeds) or whether all
+must verify. This is a policy decision, not a format decision.</p>
+<p>The signature algorithm and key for <code class="docutils literal notranslate"><span class="pre">signature-N</span></code> are
+determined either by consumer policy (e.g. compiled-in or
+fuse-derived) or by the companion <code class="docutils literal notranslate"><span class="pre">signature-N-algo</span></code> and
+<code class="docutils literal notranslate"><span class="pre">signature-N-key-hint</span></code> properties below.</p>
+</dd>
+<dt>signature-N-algo</dt><dd><p>A null-terminated string identifying the signature algorithm
+used for <code class="docutils literal notranslate"><span class="pre">signature-N</span></code>, e.g. <code class="docutils literal notranslate"><span class="pre">&quot;sha256,rsa2048&quot;</span></code>. The syntax
+matches the per-configuration <code class="docutils literal notranslate"><span class="pre">algo</span></code> property defined in
+<a class="reference internal" href="#document-chapter5-source-file-format#chapter-source-file-format"><span class="std std-ref">Flattened Image Tree (FIT) Format</span></a>.</p>
+</dd>
+<dt>signature-N-key-hint</dt><dd><p>A null-terminated string identifying the public key used to
+verify <code class="docutils literal notranslate"><span class="pre">signature-N</span></code>. The consumer maps this hint to a
+trusted public key in its key store.</p>
+</dd>
+</dl>
+</section>
+<section id="whole-fit-signing">
+<h3><span class="section-number">8.7. </span>Whole-FIT signing<a class="headerlink" href="#whole-fit-signing" title="Link to this heading">¶</a></h3>
+<p>A whole-FIT signature stored in a <code class="docutils literal notranslate"><span class="pre">signature-N</span></code> property covers
+everything in the FIT except the trailer’s contents. The trailer’s
+<code class="docutils literal notranslate"><span class="pre">totalsize</span></code> is fixed at producer time (<a class="reference internal" href="#trailer-padding"><span class="std std-ref">Padding for in-place modification</span></a>),
+so the position and extent of every other byte in the FIT are
+stable. This includes the FDT header fields, which are fully signed
+without exclusions.</p>
+<p>The same signed byte range is used by every <code class="docutils literal notranslate"><span class="pre">signature-N</span></code>
+property; multiple signatures over the same content support key
+rotation, multi-party signing and algorithm migration.</p>
+<section id="signed-byte-ranges">
+<h4><span class="section-number">8.7.1. </span>Signed byte ranges<a class="headerlink" href="#signed-byte-ranges" title="Link to this heading">¶</a></h4>
+<p>The signature covers two byte ranges, in this order:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">0x28)</span></code> — the FDT header (40 bytes).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">[0x28</span> <span class="pre">+</span> <span class="pre">trailer_totalsize,</span> <span class="pre">totalsize</span> <span class="pre">+</span> <span class="pre">boot_cpuid_phys)</span></code> —
+the main FDT’s memreserve, structure and strings blocks,
+followed by all external image data.</p></li>
+</ol>
+<p>The hash is computed over the concatenation of these two ranges in
+order. The bytes between them, <code class="docutils literal notranslate"><span class="pre">[0x28,</span> <span class="pre">0x28</span> <span class="pre">+</span> <span class="pre">trailer_totalsize)</span></code>,
+are the trailer; they are excluded from the hash so that the
+trailer’s contents can be modified post-signing.</p>
+</section>
+<section id="properties-of-the-signed-ranges">
+<h4><span class="section-number">8.7.2. </span>Properties of the signed ranges<a class="headerlink" href="#properties-of-the-signed-ranges" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p>The full FDT header is signed (range 1), so an attacker cannot
+tamper with <code class="docutils literal notranslate"><span class="pre">totalsize</span></code>, <code class="docutils literal notranslate"><span class="pre">off_dt_struct</span></code>, <code class="docutils literal notranslate"><span class="pre">off_dt_strings</span></code>,
+<code class="docutils literal notranslate"><span class="pre">off_mem_rsvmap</span></code>, <code class="docutils literal notranslate"><span class="pre">boot_cpuid_phys</span></code> or any other header
+field. The FIT layout is fully authenticated.</p></li>
+<li><p>The trailer’s <code class="docutils literal notranslate"><span class="pre">totalsize</span></code> is in the trailer’s FDT header, which
+is <em>inside</em> the excluded trailer region — but it cannot be
+tampered with for an attack: changing it would shift the start
+of range 2, causing the verifier to hash different bytes than
+the signer, and the signature would fail.</p></li>
+<li><p>Range 2 is bounded above by <code class="docutils literal notranslate"><span class="pre">totalsize</span> <span class="pre">+</span> <span class="pre">boot_cpuid_phys</span></code>,
+both of which are signed. An attacker cannot shrink the range to
+excise external data from the hash.</p></li>
+</ul>
+</section>
+<section id="verification-procedure">
+<h4><span class="section-number">8.7.3. </span>Verification procedure<a class="headerlink" href="#verification-procedure" title="Link to this heading">¶</a></h4>
+<p>A verifier:</p>
+<ol class="arabic simple">
+<li><p>Reads <code class="docutils literal notranslate"><span class="pre">trailer_totalsize</span></code> from the trailer’s FDT header
+(offset <code class="docutils literal notranslate"><span class="pre">0x2c</span></code>).</p></li>
+<li><p>Reads the main FDT’s <code class="docutils literal notranslate"><span class="pre">totalsize</span></code> (offset <code class="docutils literal notranslate"><span class="pre">0x4</span></code>) and
+<code class="docutils literal notranslate"><span class="pre">boot_cpuid_phys</span></code> (offset <code class="docutils literal notranslate"><span class="pre">0x1c</span></code>).</p></li>
+<li><p>Hashes <code class="docutils literal notranslate"><span class="pre">[0,</span> <span class="pre">0x28)</span></code> followed by
+<code class="docutils literal notranslate"><span class="pre">[0x28</span> <span class="pre">+</span> <span class="pre">trailer_totalsize,</span> <span class="pre">totalsize</span> <span class="pre">+</span> <span class="pre">boot_cpuid_phys)</span></code>.</p></li>
+<li><p>For each <code class="docutils literal notranslate"><span class="pre">signature-N</span></code> property in the trailer (starting at
+<code class="docutils literal notranslate"><span class="pre">signature-1</span></code> and stopping at the first missing number),
+verifies the hash against the signature using the algorithm and
+key indicated by <code class="docutils literal notranslate"><span class="pre">signature-N-algo</span></code> and <code class="docutils literal notranslate"><span class="pre">signature-N-key-hint</span></code>
+(or by consumer policy).</p></li>
+<li><p>Applies its policy: typically, accept if at least one signature
+verifies; some deployments may require all to verify.</p></li>
+</ol>
+</section>
+</section>
+<section id="comparison-with-tlv-trailer">
+<h3><span class="section-number">8.8. </span>Comparison with TLV trailer<a class="headerlink" href="#comparison-with-tlv-trailer" title="Link to this heading">¶</a></h3>
+<p>An earlier proposal used a custom tag-length-value (TLV) encoding
+for the trailer. The constrained-FDT trailer described here was
+chosen for the following reasons:</p>
+<ul class="simple">
+<li><p>One format is used throughout the FIT (FDT only) rather than two
+(FDT plus TLV). There is no second tag registry to maintain and
+no second encoding to specify, implement and test.</p></li>
+<li><p>The pre-authentication parser is small and auditable in either
+case, but the constrained-FDT parser also doubles as the format
+consumed by standard tools, removing the need for a second
+tooling stack.</p></li>
+<li><p>FDT property values are limited only by the FDT format itself
+(not by a 16-bit length field), which avoids future constraints
+on signature or certificate-chain sizes.</p></li>
+<li><p>New trailer entries are added by defining new property names,
+using FDT’s existing schema conventions, rather than by
+allocating new TLV tags.</p></li>
+</ul>
+</section>
 </section>
 <span id="document-references"></span><section id="references">
-<h2><span class="section-number">8. </span>References<a class="headerlink" href="#references" title="Link to this heading">¶</a></h2>
+<h2><span class="section-number">9. </span>References<a class="headerlink" href="#references" title="Link to this heading">¶</a></h2>
 <div role="list" class="citation-list">
 <div class="citation" id="dtspec" role="doc-biblioentry">
 <span class="label"><span class="fn-bracket">[</span>dtspec<span class="fn-bracket">]</span></span>
@@ -2133,7 +2694,8 @@ private key to produce the signature <code class="docutils literal notranslate">
 <li class="toctree-l1"><a class="reference internal" href="#document-chapter5-source-file-format">5. Flattened Image Tree (FIT) Format</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#document-chapter6-usage">6. Flattened Image Tree (FIT) Usage</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#document-chapter7-security">7. Security</a></li>
-<li class="toctree-l1"><a class="reference internal" href="#document-references">8. References</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-chapter8-binary-trailer">8. Binary Trailer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#document-references">9. References</a></li>
 </ul>
 
 <div class="relations">
