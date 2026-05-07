@@ -922,16 +922,10 @@ a single directory (parameter -k to mkimage). For a given key &lt;name&gt;, its
 private key is stored in &lt;name&gt;.key and the certificate is stored in
 &lt;name&gt;.crt.</p>
 </dd>
-<dt>sign-images</dt><dd><p><em>Deprecated.</em> An unsorted list of property names on the parent
-configuration node identifying the images to sign. New FITs shall
-omit this property. The signer and verifier instead derive the
-set of referenced images automatically from the configuration’s
-string properties as described in <a class="reference internal" href="#document-chapter7-security#hash-contents"><span class="std std-ref">Hash contents</span></a>. This
-auto-discovery covers every image referenced by the configuration
-without requiring producers to keep the list in sync.</p>
-<p>Tools should ignore <code class="docutils literal notranslate"><span class="pre">sign-images</span></code> if present and apply the
-auto-discovery rule unconditionally. A future revision of this
-specification may remove the property entirely.</p>
+<dt>sign-images</dt><dd><p>An unsorted list of images to sign, each being a property of the conf
+node that contains them. The default is “kernel,fdt” which means that these
+two images will be looked up in the config and signed if present. This is
+used by mkimage to determine which images to sign.</p>
 </dd>
 </dl>
 <p>The following properties are added as part of signing, and are mandatory:</p>
@@ -1250,7 +1244,7 @@ not</em> be specified in a configuration node.</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>o signature-1
     |- algo = &quot;algorithm name&quot;
     |- key-name-hint = &quot;key name&quot;
-    |- sign-images = &quot;path1&quot;, &quot;path2&quot;;  /* deprecated */
+    |- sign-images = &quot;path1&quot;, &quot;path2&quot;;
     |- value = [hash or checksum value]
     |- hashed-strings = &lt;0 len&gt;
 </pre></div>
@@ -1883,6 +1877,7 @@ included in a configuration signature hash.</p>
             signature-1 {
                 algo = &quot;sha256,rsa2048&quot;;
                 key-name-hint = &quot;dev&quot;;
+                sign-images = &quot;kernel&quot;, &quot;fdt&quot;;
             };
         };
     };
@@ -1936,6 +1931,7 @@ resulting FIT looks like this:</p>
             signature-1 {
                 algo = &quot;sha256,rsa2048&quot;;
                 key-name-hint = &quot;dev&quot;;
+                sign-images = &quot;kernel&quot;, &quot;fdt&quot;;
                 value = &lt;...256-byte RSA-2048 signature...&gt;;
                 hashed-nodes = &quot;/&quot;, &quot;/configurations/conf-1&quot;,
                     &quot;/images/kernel&quot;, &quot;/images/kernel/hash-1&quot;,
@@ -2011,6 +2007,7 @@ or its parent is in the node list.</p>
             <strong>signature-1 {</strong>
                 algo = &quot;sha256,rsa2048&quot;;
                 key-name-hint = &quot;dev&quot;;
+                sign-images = &quot;kernel&quot;, &quot;fdt&quot;;
                 value = &lt;...256-byte RSA-2048 signature...&gt;;
                 hashed-nodes = &quot;/&quot;, &quot;/configurations/conf-1&quot;, ...;
                 hashed-strings = &lt;0x00000000 0x000000d4&gt;;
