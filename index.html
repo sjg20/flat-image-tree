@@ -749,11 +749,9 @@ not relative to the loading of the FIT. This is mandatory if
 ‘#address-cells’ property of the root node.</p>
 <p>When omitted, the entry point is assumed to be equal to the
 effective load address - execution starts at the first
-instruction of the loaded image. The bootloader may choose a
-different entry point when the image format requires it, but is
-not required to do so. Producers requiring a specific entry
-point shall set the <code class="docutils literal notranslate"><span class="pre">entry</span></code> property explicitly. Image formats
-that need richer entry semantics are better served by a
+instruction of the loaded image. Producers requiring a specific
+entry point shall set the <code class="docutils literal notranslate"><span class="pre">entry</span></code> property explicitly. Image
+formats that need richer entry semantics are better served by a
 container such as ELF.</p>
 </dd>
 </dl>
@@ -766,13 +764,16 @@ suitably-aligned region of RAM). If the bootloader cannot
 determine a suitable load address, it shall refuse to boot the
 image.</p>
 <p>The bootloader is allowed, but not required, to use the image
-data address as the load address. Producers requiring a specific
-address shall set the <code class="docutils literal notranslate"><span class="pre">load</span></code> property explicitly. Image
-producers shall not rely on a particular fallback address being
-chosen by the bootloader; doing so creates a hidden coupling
-between the FIT layout and runtime behaviour, which breaks for
-inline FITs (where data alignment is constrained by the FDT
-structure) and for external FITs whose placement may vary.</p>
+data address (the location of the image’s data bytes - whether
+inline via <code class="docutils literal notranslate"><span class="pre">data</span></code>, in an attached store via <code class="docutils literal notranslate"><span class="pre">data-offset</span></code> or
+at a fixed address via <code class="docutils literal notranslate"><span class="pre">data-position</span></code>) as the load address.
+Producers requiring a specific address shall set the <code class="docutils literal notranslate"><span class="pre">load</span></code>
+property explicitly. Image producers shall not rely on a
+particular fallback address being chosen by the bootloader;
+doing so creates a hidden coupling between the FIT layout and
+runtime behaviour, which breaks for inline FITs (where data
+alignment is constrained by the FDT structure) and for external
+FITs whose placement may vary.</p>
 </dd>
 <dt><span class="target" id="index-24"></span>compatible</dt><dd><p>Compatible method for loading image.
 Mandatory for types: “fpga”, and images that do not specify a load address.
