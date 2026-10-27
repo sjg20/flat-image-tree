@@ -328,6 +328,7 @@ the ‘/images’ node should have the following layout:</p>
     o hash-1 {...}
     o hash-2 {...}
     o dm-verity {...}
+    o aslr-rand {...}
     ...
 </pre></div>
 </div>
@@ -549,7 +550,7 @@ the FIT.</p>
 <p>The target node must not itself have an <code class="docutils literal notranslate"><span class="pre">image-data</span></code> property;
 chains of references are not permitted.</p>
 <p>No other properties are inherited from the source node; all metadata
-must be set explicitly. See <a class="reference internal" href="#id5">Shared image data</a> for details and an
+must be set explicitly. See <a class="reference internal" href="#id10">Shared image data</a> for details and an
 example.</p>
 </dd>
 <dt>data-size</dt><dd><p>Size of the data in bytes. This is mandatory if <span class="target" id="index-19"></span>external data is
@@ -746,39 +747,14 @@ not relative to the loading of the FIT. This is mandatory if
 </table>
 </dd>
 <dt>entry</dt><dd><p>Entry point address, address size is determined by
-‘#address-cells’ property of the root node.</p>
-<p>A FIT image’s data may itself be an executable container, such as
-an ELF or PE binary, in which case the container carries its own
-entry point. When <code class="docutils literal notranslate"><span class="pre">entry</span></code> is omitted the bootloader determines
-the entry point as follows: if the image data is an ELF or PE
-binary (or another container the bootloader recognises) it may
-parse the container and use the entry point recorded inside it;
-otherwise, as a fallback, the entry point is assumed to be equal
-to the effective load address, so execution starts at the first
-instruction of the loaded image.</p>
-<p>Producers requiring a specific entry point shall set the <code class="docutils literal notranslate"><span class="pre">entry</span></code>
-property explicitly rather than relying on container parsing.</p>
+‘#address-cells’ property of the root node.
+Mandatory for types: “firmware”, and “kernel”.</p>
 </dd>
 </dl>
 <dl id="prop-load">
 <dt>load</dt><dd><p>Load address, address size is determined by ‘#address-cells’
-property of the root node.</p>
-<p>When omitted, the bootloader chooses an effective load address
-appropriate for the image type and target platform (e.g. a free,
-suitably-aligned region of RAM). If the bootloader cannot
-determine a suitable load address, it shall refuse to boot the
-image.</p>
-<p>The bootloader is allowed, but not required, to use the image
-data address (the location of the image’s data bytes - whether
-inline via <code class="docutils literal notranslate"><span class="pre">data</span></code>, in an attached store via <code class="docutils literal notranslate"><span class="pre">data-offset</span></code> or
-at a fixed address via <code class="docutils literal notranslate"><span class="pre">data-position</span></code>) as the load address.
-Producers requiring a specific address shall set the <code class="docutils literal notranslate"><span class="pre">load</span></code>
-property explicitly. Image producers shall not rely on a
-particular fallback address being chosen by the bootloader;
-doing so creates a hidden coupling between the FIT layout and
-runtime behaviour, which breaks for inline FITs (where data
-alignment is constrained by the FDT structure) and for external
-FITs whose placement may vary.</p>
+property of the root node.
+Mandatory for types: “firmware”, and “kernel”.</p>
 </dd>
 <dt><span class="target" id="index-24"></span>compatible</dt><dd><p>Compatible method for loading image.
 Mandatory for types: “fpga”, and images that do not specify a load address.
@@ -835,6 +811,10 @@ calculated for node’s data according to specified algorithm.</p>
 Merkle-tree metadata so that the bootloader can construct kernel
 command-line parameters for integrity-verified boot.
 See <a class="reference internal" href="#id3">dm-verity nodes</a>.</p>
+</dd>
+<dt>OS requests</dt><dd><p>For images of type <code class="docutils literal notranslate"><span class="pre">kernel</span></code>, each sub-node whose compatible string
+starts with <code class="docutils literal notranslate"><span class="pre">vbe,</span></code> asks the bootloader to provide something to the OS
+when it boots. See <a class="reference internal" href="#id5">OS-request nodes</a>.</p>
 </dd>
 </dl>
 </section>
@@ -1090,8 +1070,97 @@ kernel command line (see <a class="reference internal" href="#document-chapter6-
 expected to reside inside the same sub-image.</p>
 </section>
 </section>
+<section id="os-request-nodes">
+<span id="id5"></span><h3><span class="section-number">5.7. </span>OS-request nodes<a class="headerlink" href="#os-request-nodes" title="Link to this heading">¶</a></h3>
+<p>An OS can ask the bootloader for information it needs early in boot,
+such as random data to seed its random-number generator,
+by adding OS-request nodes to its image node.
+OS requests come from Verified Boot for Embedded <a class="reference internal" href="#document-references#vbe" id="id6"><span>[VBE]</span></a>,
+hence the <code class="docutils literal notranslate"><span class="pre">vbe,</span></code> prefix on their compatible strings and properties.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>o aslr-rand
+    |- compatible = &quot;vbe,aslr-rand&quot;
+    |- vbe,size = &lt;8&gt;
+    |- vbe,required
+</pre></div>
+</div>
+<p>Whoever builds the FIT chooses the node name.
+The bootloader identifies each request by its compatible string,
+and ignores sub-nodes which do not have one starting with <code class="docutils literal notranslate"><span class="pre">vbe,</span></code>.</p>
+<p>The bootloader passes what was requested to the OS in the <code class="docutils literal notranslate"><span class="pre">/chosen</span></code> node of
+the devicetree,
+using the standard properties described by the devicetree schema <a class="reference internal" href="#document-references#dtschema" id="id7"><span>[dtschema]</span></a>
+where one exists.
+The OS then needs no knowledge of OS requests to use the result,
+and a bootloader which does not support them can still provide the same
+properties by other means.</p>
+<section id="id8">
+<h4><span class="section-number">5.7.1. </span>Mandatory properties<a class="headerlink" href="#id8" title="Link to this heading">¶</a></h4>
+<dl class="simple">
+<dt>compatible</dt><dd><p>The request, as <code class="docutils literal notranslate"><span class="pre">&quot;vbe,&lt;request&gt;&quot;</span></code>.
+See <a class="reference internal" href="#table-os-requests"><span class="std std-numref">Table 5.1</span></a> for the defined requests.</p>
+</dd>
+</dl>
+</section>
+<section id="id9">
+<h4><span class="section-number">5.7.2. </span>Optional properties<a class="headerlink" href="#id9" title="Link to this heading">¶</a></h4>
+<dl class="simple">
+<dt>vbe,size</dt><dd><p>The number of bytes of data requested, as a 32-bit value.
+Each request says whether it needs this property and what sizes it
+accepts.
+The bootloader may refuse a size larger than it can provide.</p>
+</dd>
+<dt>vbe,required</dt><dd><p>Boolean.
+The OS cannot run correctly without this request.
+If the bootloader does not support the request or cannot satisfy it,
+it must not boot the OS.
+Without this property, the bootloader skips a request it does not
+support and boots the OS anyway.</p>
+</dd>
+</dl>
+<span id="table-os-requests"></span><table class="docutils align-default" id="id18">
+<caption><span class="caption-number">Table 5.1 </span><span class="caption-text">OS requests</span><a class="headerlink" href="#id18" title="Link to this table">¶</a></caption>
+<thead>
+<tr class="row-odd"><th class="head"><p>Compatible</p></th>
+<th class="head"><p>vbe,size</p></th>
+<th class="head"><p>Provided in /chosen</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>vbe,aslr-rand</p></td>
+<td><p>Optional,
+must be 8</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">kaslr-seed</span></code>: 64 bits of random data,
+which the OS uses to randomise its
+address-space layout</p></td>
+</tr>
+<tr class="row-odd"><td><p>vbe,random-seed</p></td>
+<td><p>Mandatory</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">rng-seed</span></code>: <code class="docutils literal notranslate"><span class="pre">vbe,size</span></code> bytes of
+random data, which the OS uses to seed
+its random-number generator</p></td>
+</tr>
+</tbody>
+</table>
+<p>The bootloader should take the random data from a hardware random-number
+generator.
+What it provides replaces any value the bootloader would otherwise put in the
+same property.</p>
+</section>
+<section id="reporting-errors">
+<h4><span class="section-number">5.7.3. </span>Reporting errors<a class="headerlink" href="#reporting-errors" title="Link to this heading">¶</a></h4>
+<p>The bootloader may copy each request node to a sub-node of <code class="docutils literal notranslate"><span class="pre">/chosen</span></code> with the
+same name.
+If it cannot satisfy the request, it may then add these properties to the copy:</p>
+<dl class="simple">
+<dt>vbe,error</dt><dd><p>A string describing the problem, for display or logging.</p>
+</dd>
+<dt>vbe,errnum</dt><dd><p>A negative error number, whose meaning is specific to the bootloader.</p>
+</dd>
+</dl>
+</section>
+</section>
 <section id="shared-image-data">
-<span id="id5"></span><h3><span class="section-number">5.7. </span>Shared image data<a class="headerlink" href="#shared-image-data" title="Link to this heading">¶</a></h3>
+<span id="id10"></span><h3><span class="section-number">5.8. </span>Shared image data<a class="headerlink" href="#shared-image-data" title="Link to this heading">¶</a></h3>
 <p>When multiple configurations need to load the same binary at different
 addresses, the <code class="docutils literal notranslate"><span class="pre">image-data</span></code> property allows an image node to share another
 node’s binary data rather than duplicating it. The referencing node carries
@@ -1164,7 +1233,7 @@ property. The <code class="docutils literal notranslate"><span class="pre">data<
 authoritative.</p>
 </section>
 <section id="configurations-node">
-<h3><span class="section-number">5.8. </span>‘/configurations’ node<a class="headerlink" href="#configurations-node" title="Link to this heading">¶</a></h3>
+<h3><span class="section-number">5.9. </span>‘/configurations’ node<a class="headerlink" href="#configurations-node" title="Link to this heading">¶</a></h3>
 <p>The ‘configurations’ node creates convenient, labeled
 <span class="target" id="index-33"></span>boot configurations,
 which combine together <span class="target" id="index-34"></span>kernel images with their
@@ -1178,22 +1247,22 @@ which combine together <span class="target" id="index-34"></span>kernel images w
     ...
 </pre></div>
 </div>
-<section id="id6">
-<h4><span class="section-number">5.8.1. </span>Optional property<a class="headerlink" href="#id6" title="Link to this heading">¶</a></h4>
+<section id="id11">
+<h4><span class="section-number">5.9.1. </span>Optional property<a class="headerlink" href="#id11" title="Link to this heading">¶</a></h4>
 <dl class="simple">
 <dt>default</dt><dd><p>Selects one of the configuration sub-nodes as a default configuration.</p>
 </dd>
 </dl>
 </section>
-<section id="id7">
-<h4><span class="section-number">5.8.2. </span>Mandatory nodes<a class="headerlink" href="#id7" title="Link to this heading">¶</a></h4>
+<section id="id12">
+<h4><span class="section-number">5.9.2. </span>Mandatory nodes<a class="headerlink" href="#id12" title="Link to this heading">¶</a></h4>
 <dl class="simple">
 <dt>configuration-sub-node-unit-name</dt><dd><p>At least one configuration sub-node is required.</p>
 </dd>
 </dl>
 </section>
-<section id="id8">
-<h4><span class="section-number">5.8.3. </span>Optional nodes<a class="headerlink" href="#id8" title="Link to this heading">¶</a></h4>
+<section id="id13">
+<h4><span class="section-number">5.9.3. </span>Optional nodes<a class="headerlink" href="#id13" title="Link to this heading">¶</a></h4>
 <dl class="simple">
 <dt>signature-1</dt><dd><p>Each signature sub-node represents a separate signature
 calculated for the configuration according to specified algorithm.</p>
@@ -1202,7 +1271,7 @@ calculated for the configuration according to specified algorithm.</p>
 </section>
 </section>
 <section id="configuration-nodes">
-<h3><span class="section-number">5.9. </span>Configuration nodes<a class="headerlink" href="#configuration-nodes" title="Link to this heading">¶</a></h3>
+<h3><span class="section-number">5.10. </span>Configuration nodes<a class="headerlink" href="#configuration-nodes" title="Link to this heading">¶</a></h3>
 <p>Each configuration has the following structure:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>o config-1
     |- description = &quot;configuration description&quot;;
@@ -1216,15 +1285,15 @@ calculated for the configuration according to specified algorithm.</p>
     o signature-1 {...}
 </pre></div>
 </div>
-<section id="id9">
-<h4><span class="section-number">5.9.1. </span>Mandatory properties<a class="headerlink" href="#id9" title="Link to this heading">¶</a></h4>
+<section id="id14">
+<h4><span class="section-number">5.10.1. </span>Mandatory properties<a class="headerlink" href="#id14" title="Link to this heading">¶</a></h4>
 <dl class="simple">
 <dt>description</dt><dd><p>Textual configuration description.</p>
 </dd>
 </dl>
 </section>
-<section id="id10">
-<h4><span class="section-number">5.9.2. </span>Conditionally mandatory property<a class="headerlink" href="#id10" title="Link to this heading">¶</a></h4>
+<section id="id15">
+<h4><span class="section-number">5.10.2. </span>Conditionally mandatory property<a class="headerlink" href="#id15" title="Link to this heading">¶</a></h4>
 <dl class="simple">
 <dt>kernel or firmware</dt><dd><p>Unit name of the corresponding <span class="target" id="index-36"></span>kernel or <span class="target" id="index-37"></span>firmware
 (u-boot, op-tee, etc) image. If both “kernel” and “firmware” are specified,
@@ -1233,8 +1302,8 @@ properties are optional.</p>
 </dd>
 </dl>
 </section>
-<section id="id11">
-<h4><span class="section-number">5.9.3. </span>Optional properties<a class="headerlink" href="#id11" title="Link to this heading">¶</a></h4>
+<section id="id16">
+<h4><span class="section-number">5.10.3. </span>Optional properties<a class="headerlink" href="#id16" title="Link to this heading">¶</a></h4>
 <dl>
 <dt>cmdline</dt><dd><p>Command line passed to the next boot stage, e.g. the operating system
 kernel. The value is an UTF-8 encoded string.</p>
@@ -1283,7 +1352,7 @@ not</em> be specified in a configuration node.</p>
 </section>
 </section>
 <section id="configuration-signature-nodes">
-<h3><span class="section-number">5.10. </span>Configuration-signature nodes<a class="headerlink" href="#configuration-signature-nodes" title="Link to this heading">¶</a></h3>
+<h3><span class="section-number">5.11. </span>Configuration-signature nodes<a class="headerlink" href="#configuration-signature-nodes" title="Link to this heading">¶</a></h3>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>o signature-1
     |- algo = &quot;algorithm name&quot;
     |- key-name-hint = &quot;key name&quot;
@@ -1292,8 +1361,8 @@ not</em> be specified in a configuration node.</p>
     |- hashed-strings = &lt;0 len&gt;
 </pre></div>
 </div>
-<section id="id12">
-<h4><span class="section-number">5.10.1. </span>Mandatory properties<a class="headerlink" href="#id12" title="Link to this heading">¶</a></h4>
+<section id="id17">
+<h4><span class="section-number">5.11.1. </span>Mandatory properties<a class="headerlink" href="#id17" title="Link to this heading">¶</a></h4>
 <dl class="simple">
 <dt>algo</dt><dd><p>See <a class="reference internal" href="#fit-algorithm">FIT Algorithm</a>.</p>
 </dd>
@@ -1466,6 +1535,10 @@ to enable or disable certain devicetree nodes based on the hardware
 in use.</p>
 <p>The fixups required depend on the OS and its expectations. The result is a
 devicetree slightly modified from the FIT version.</p>
+<p>If the OS image contains OS requests (see <a class="reference internal" href="#document-chapter5-source-file-format#os-request-nodes"><span class="std std-ref">OS-request nodes</span></a>), the
+bootloader handles them at this point, adding the requested information to the
+<code class="docutils literal notranslate"><span class="pre">/chosen</span></code> node. It should do this after any other fixup which sets the same
+properties, so that what the OS asked for is what it receives.</p>
 </section>
 <section id="jump-to-the-os">
 <h4><span class="section-number">6.2.5. </span>Jump to the OS<a class="headerlink" href="#jump-to-the-os" title="Link to this heading">¶</a></h4>
@@ -2119,6 +2192,11 @@ private key to produce the signature <code class="docutils literal notranslate">
 <span class="label"><span class="fn-bracket">[</span>dtspec<span class="fn-bracket">]</span></span>
 <p>Devicetree Specification
 <a class="reference external" href="https://www.devicetree.org/specifications">https://www.devicetree.org/specifications</a></p>
+</div>
+<div class="citation" id="dtschema" role="doc-biblioentry">
+<span class="label"><span class="fn-bracket">[</span>dtschema<span class="fn-bracket">]</span></span>
+<p>Devicetree schema, including the /chosen node properties
+<a class="reference external" href="https://github.com/devicetree-org/dt-schema">https://github.com/devicetree-org/dt-schema</a></p>
 </div>
 <div class="citation" id="vbe" role="doc-biblioentry">
 <span class="label"><span class="fn-bracket">[</span>VBE<span class="fn-bracket">]</span></span>
