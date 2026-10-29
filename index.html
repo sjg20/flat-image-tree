@@ -1143,8 +1143,8 @@ its random-number generator</p></td>
 </table>
 <p>The bootloader should take the random data from a hardware random-number
 generator.
-What it provides replaces any value the bootloader would otherwise put in the
-same property.</p>
+If the bootloader would otherwise write its own value to one of these
+properties, the data for the request replaces it.</p>
 </section>
 <section id="reporting-errors">
 <h4><span class="section-number">5.7.3. </span>Reporting errors<a class="headerlink" href="#reporting-errors" title="Link to this heading">¶</a></h4>
