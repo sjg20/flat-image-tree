@@ -1188,7 +1188,7 @@ calculated for the configuration according to specified algorithm.</p>
     |- loadables = &quot;loadables sub-node unit-name&quot; [, ...];
     |- script = &quot;script sub-node unit-name&quot;;
     |- compatible = &quot;vendor,board-style device tree compatible string&quot;;
-    |- &lt;vendor&gt;,&lt;name&gt; = &lt;vendor-defined value&gt;;
+    o match-1 {...}
     o signature-1 {...}
 </pre></div>
 </div>
@@ -1198,7 +1198,7 @@ calculated for the configuration according to specified algorithm.</p>
 <dt>description</dt><dd><p>Textual configuration description. This is intended for people, e.g. for
 display in a boot menu. Software must not parse it or rely on its format.
 Information that a bootloader uses to select a configuration belongs in
-<code class="docutils literal notranslate"><span class="pre">compatible</span></code> or in <a class="reference internal" href="#vendor-specific-properties">vendor-specific properties</a>.</p>
+<code class="docutils literal notranslate"><span class="pre">compatible</span></code> or in <a class="reference internal" href="#id12">match nodes</a>.</p>
 </dd>
 </dl>
 </section>
@@ -1253,9 +1253,6 @@ image, i.e. kernel or firmware. The configuration’s images may be loaded
 into memory for use by the executable image, which comes from another
 configuration or FIT. See see <a class="reference internal" href="#document-chapter6-usage#multi-step"><span class="std std-ref">Multi-step loading</span></a>.</p>
 </dd>
-<dt>&lt;vendor&gt;,&lt;name&gt;</dt><dd><p>Vendor-specific property, typically used by a bootloader to select a
-configuration. See <a class="reference internal" href="#vendor-specific-properties">vendor-specific properties</a>.</p>
-</dd>
 </dl>
 <p>The FDT blob is required to properly boot FDT-based kernel, so the minimal
 configuration for 2.6 FDT kernel is (kernel, fdt) pair.</p>
@@ -1263,37 +1260,77 @@ configuration for 2.6 FDT kernel is (kernel, fdt) pair.</p>
 ‘struct bd_info’ must be passed instead of FDT blob, thus fdt property <em>must
 not</em> be specified in a configuration node.</p>
 </section>
-<section id="vendor-specific-properties">
-<span id="vendor-props"></span><h4><span class="section-number">5.9.4. </span>Vendor-specific properties<a class="headerlink" href="#vendor-specific-properties" title="Link to this heading">¶</a></h4>
+</section>
+<section id="match-nodes">
+<span id="id12"></span><h3><span class="section-number">5.10. </span>Match nodes<a class="headerlink" href="#match-nodes" title="Link to this heading">¶</a></h3>
 <p>Bootloaders differ in the information they use to select a configuration. One
 may read a board ID and SoC revision from fuses, another a board name and SKU
-ID from an EEPROM or GPIOs. It is not practical for this specification to
-define a property for each of these.</p>
-<p>Instead, a configuration node may hold properties whose names start with a
-vendor prefix, in the form <code class="docutils literal notranslate"><span class="pre">&lt;vendor&gt;,&lt;name&gt;</span></code>, as is done for devicetree
-bindings. The prefix is one listed in the devicetree vendor prefixes
-<a class="reference internal" href="#document-references#vendor-prefixes" id="id12"><span>[vendor-prefixes]</span></a>, typically that of the vendor of the bootloader or platform
-which uses the properties. That vendor defines the names, types and meaning of
-the properties, along with how its bootloader uses them to select a
-configuration, e.g. whether they are used instead of, or as well as,
-<code class="docutils literal notranslate"><span class="pre">compatible</span></code>.</p>
-<p>A bootloader must ignore vendor-specific properties that it does not
-recognise. Tools which create a FIT should pass these properties through
-unchanged.</p>
-<p>Since they are properties of the configuration node, they are covered by a
-configuration signature (see <a class="reference internal" href="#configuration-signature-nodes">Configuration-signature nodes</a>), so a signed
-FIT protects them in the same way as <code class="docutils literal notranslate"><span class="pre">compatible</span></code>.</p>
-<p>For example, one bootloader may select a configuration using four integers
-read from the hardware:</p>
+ID from an EEPROM or GPIOs. Where this does not fit into a compatible string,
+it is not practical for this specification to define a property for each of
+these.</p>
+<p>Instead, a configuration node may hold one or more match sub-nodes, each
+describing the configuration in terms of one matching scheme:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>o match-1
+    |- compatible = &quot;vendor,scheme&quot;;
+    |- &lt;name&gt; = &lt;value defined by the scheme&gt;;
+    ...
+</pre></div>
+</div>
+<p>Match nodes are named <code class="docutils literal notranslate"><span class="pre">match</span></code>, optionally followed by a hyphen and a number,
+e.g. <code class="docutils literal notranslate"><span class="pre">match-1</span></code>, <code class="docutils literal notranslate"><span class="pre">match-2</span></code>.</p>
+<section id="id13">
+<h4><span class="section-number">5.10.1. </span>Mandatory properties<a class="headerlink" href="#id13" title="Link to this heading">¶</a></h4>
+<dl class="simple">
+<dt>compatible</dt><dd><p>Name of the matching scheme, in the form <code class="docutils literal notranslate"><span class="pre">&quot;&lt;vendor&gt;,&lt;scheme&gt;&quot;</span></code>. The
+prefix is one listed in the devicetree vendor prefixes <a class="reference internal" href="#document-references#vendor-prefixes" id="id14"><span>[vendor-prefixes]</span></a>,
+typically that of the vendor of the bootloader or platform which uses the
+scheme.</p>
+</dd>
+</dl>
+</section>
+<section id="id15">
+<h4><span class="section-number">5.10.2. </span>Optional properties<a class="headerlink" href="#id15" title="Link to this heading">¶</a></h4>
+<p>The other properties are defined by the scheme. Since the scheme is named by
+<code class="docutils literal notranslate"><span class="pre">compatible</span></code>, these need no vendor prefix.</p>
+</section>
+<section id="matching-schemes">
+<h4><span class="section-number">5.10.3. </span>Matching schemes<a class="headerlink" href="#matching-schemes" title="Link to this heading">¶</a></h4>
+<p>The vendor which owns the prefix defines and documents each of its schemes.
+This covers:</p>
+<ul class="simple">
+<li><p>the properties used, along with their types and meaning</p></li>
+<li><p>how the bootloader compares them with the information it reads from the
+hardware, e.g. exact equality, a mask or a minimum revision</p></li>
+<li><p>how the scheme combines with the configuration’s <code class="docutils literal notranslate"><span class="pre">compatible</span></code> property,
+e.g. whether it is used instead of, or as well as, compatible matching</p></li>
+</ul>
+<p>A bootloader must ignore match nodes whose scheme it does not implement. If
+no configuration has a match node with a scheme that the bootloader
+implements, it selects a configuration as described in <a class="reference internal" href="#document-chapter6-usage#chapter-usage"><span class="std std-ref">Flattened Image Tree (FIT) Usage</span></a>.
+Tools which create a FIT should pass match nodes through unchanged.</p>
+<p>Match nodes are included in a configuration signature (see
+<a class="reference internal" href="#document-chapter7-security#hash-contents"><span class="std std-ref">Hash contents</span></a>). The bootloader selects a configuration before checking
+its signature, so a match node which has been changed causes the selected
+configuration to fail verification, rather than allowing an unintended
+configuration to boot.</p>
+</section>
+<section id="examples">
+<h4><span class="section-number">5.10.4. </span>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h4>
+<p>One bootloader may select a configuration using four integers read from the
+hardware:</p>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>conf-1 {
     description = &quot;Blazer&quot;;
     compatible = &quot;google,blazer&quot;;
     kernel = &quot;kernel&quot;;
     fdt = &quot;fdt-1&quot;;
-    google,board-id = &lt;0x070406&gt;;
-    google,board-rev = &lt;0x010000&gt;;
-    google,soc-id = &lt;0x0005&gt;;
-    google,soc-rev = &lt;0x010000&gt;;
+
+    match-1 {
+        compatible = &quot;google,board-id&quot;;
+        board-id = &lt;0x070406&gt;;
+        board-rev = &lt;0x010000&gt;;
+        soc-id = &lt;0x0005&gt;;
+        soc-rev = &lt;0x010000&gt;;
+    };
 };
 </pre></div>
 </div>
@@ -1303,16 +1340,22 @@ read from the hardware:</p>
     compatible = &quot;acme,roadrunner&quot;;
     kernel = &quot;kernel&quot;;
     fdt = &quot;fdt-1&quot;;
-    acme,board-name = &quot;roadrunner&quot;;
-    acme,board-rev = &lt;3&gt;;
-    acme,sku-id = &lt;0x12&gt;;
+
+    match-1 {
+        compatible = &quot;acme,board-sku&quot;;
+        board-name = &quot;roadrunner&quot;;
+        board-rev = &lt;3&gt;;
+        sku-id = &lt;0x12&gt;;
+    };
 };
 </pre></div>
 </div>
+<p>A configuration which can be booted by both bootloaders could hold both match
+nodes, as <code class="docutils literal notranslate"><span class="pre">match-1</span></code> and <code class="docutils literal notranslate"><span class="pre">match-2</span></code>.</p>
 </section>
 </section>
 <section id="configuration-signature-nodes">
-<h3><span class="section-number">5.10. </span>Configuration-signature nodes<a class="headerlink" href="#configuration-signature-nodes" title="Link to this heading">¶</a></h3>
+<h3><span class="section-number">5.11. </span>Configuration-signature nodes<a class="headerlink" href="#configuration-signature-nodes" title="Link to this heading">¶</a></h3>
 <div class="highlight-none notranslate"><div class="highlight"><pre><span></span>o signature-1
     |- algo = &quot;algorithm name&quot;
     |- key-name-hint = &quot;key name&quot;
@@ -1321,8 +1364,8 @@ read from the hardware:</p>
     |- hashed-strings = &lt;0 len&gt;
 </pre></div>
 </div>
-<section id="id13">
-<h4><span class="section-number">5.10.1. </span>Mandatory properties<a class="headerlink" href="#id13" title="Link to this heading">¶</a></h4>
+<section id="id16">
+<h4><span class="section-number">5.11.1. </span>Mandatory properties<a class="headerlink" href="#id16" title="Link to this heading">¶</a></h4>
 <dl class="simple">
 <dt>algo</dt><dd><p>See <a class="reference internal" href="#fit-algorithm">FIT Algorithm</a>.</p>
 </dd>
@@ -1473,9 +1516,9 @@ found, searching stops, using the best match found in the stage.</p>
 <p>Other suffixes may be added in future.</p>
 <p>Some bootloaders select a configuration using information which does not fit
 into a compatible string, such as a board ID and SoC revision. These may use
-vendor-specific properties in the configuration node instead; see
-<a class="reference internal" href="#document-chapter5-source-file-format#vendor-props"><span class="std std-ref">Vendor-specific properties</span></a>. The bootloader must not parse the configuration’s
-<code class="docutils literal notranslate"><span class="pre">description</span></code> for this purpose.</p>
+match nodes in the configuration instead; see <a class="reference internal" href="#document-chapter5-source-file-format#match-nodes"><span class="std std-ref">Match nodes</span></a>. The
+bootloader must not parse the configuration’s <code class="docutils literal notranslate"><span class="pre">description</span></code> for this
+purpose.</p>
 </section>
 <section id="load-the-images-from-the-selected-configuration">
 <h4><span class="section-number">6.2.3. </span>Load the images from the selected configuration<a class="headerlink" href="#load-the-images-from-the-selected-configuration" title="Link to this heading">¶</a></h4>
@@ -1848,6 +1891,8 @@ contains:</p>
 <ul class="simple">
 <li><p>the root (<code class="docutils literal notranslate"><span class="pre">/</span></code>) node,</p></li>
 <li><p>the configuration node (e.g. <code class="docutils literal notranslate"><span class="pre">/configurations/conf-1</span></code>),</p></li>
+<li><p>any match sub-nodes of the configuration node
+(e.g. <code class="docutils literal notranslate"><span class="pre">/configurations/conf-1/match-1</span></code>, see <a class="reference internal" href="#document-chapter5-source-file-format#match-nodes"><span class="std std-ref">Match nodes</span></a>),</p></li>
 <li><p>each image node referenced by the configuration
 (e.g. <code class="docutils literal notranslate"><span class="pre">/images/kernel</span></code>, <code class="docutils literal notranslate"><span class="pre">/images/fdt-1</span></code>),</p></li>
 <li><p>the hash sub-nodes of those image nodes
