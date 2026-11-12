@@ -791,6 +791,17 @@ If it holds more than one, the bootloader handles them as a single request
 with the largest ``vbe,size``,
 which is required if any of them has ``vbe,required``.
 
+Signing
+~~~~~~~
+
+OS-request nodes are included in a configuration signature
+(see :ref:`hash_contents`),
+so a signed FIT protects their properties,
+including ``vbe,required``.
+A FIT signed by a tool which does not include them fails to verify with a
+bootloader which does,
+so it must be signed again.
+
 Compatibility
 ~~~~~~~~~~~~~
 
